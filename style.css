@@ -135,6 +135,7 @@ button.wide { width: 100%; }
   background: var(--panel-bg);
 }
 .toolbar-label { font-size: 12px; color: var(--muted); }
+.toolbar select { width: auto; }
 .divider { width: 1px; align-self: stretch; background: var(--border); }
 .spacer { flex: 1 1 auto; }
 .meta { font-size: 12px; color: var(--muted); }

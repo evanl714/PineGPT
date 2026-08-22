@@ -4,13 +4,13 @@ const API_URL = 'https://openrouter.ai/api/v1/chat/completions';
 const MODELS_URL = 'https://openrouter.ai/api/v1/models';
 const CONTEXT_AFTER = 4000;      // chars of draft sent after the cursor
 const SUMMARIZE_LIMIT = 120000;  // max chars of draft sent to the summarizer
-const STORE = { key: 'cw_key', model: 'cw_model', temp: 'cw_temp', style: 'cw_style', doc: 'cw_doc', story: 'cw_story', ctx: 'cw_ctx', lore: 'cw_lore', dir: 'cw_dir', sys: 'cw_sys', mature: 'cw_mature' };
+const STORE = { key: 'cw_key', model: 'cw_model', temp: 'cw_temp', style: 'cw_style', doc: 'cw_doc', story: 'cw_story', ctx: 'cw_ctx', lore: 'cw_lore', dir: 'cw_dir', sys: 'cw_sys', mature: 'cw_mature', len: 'cw_len' };
 
 const $ = (s) => document.querySelector(s);
 const els = {
   key: $('#apiKey'), showKey: $('#showKey'),
   model: $('#model'), modelList: $('#modelList'), refreshModels: $('#refreshModels'), modelHint: $('#modelHint'),
-  temp: $('#temp'), tempVal: $('#tempVal'),
+  temp: $('#temp'), tempVal: $('#tempVal'), genLen: $('#genLen'),
   style: $('#styleNotes'), story: $('#storyNotes'), btnSummarize: $('#btnSummarize'),
   sysOverride: $('#sysOverride'), matureOk: $('#matureOk'),
   loreScan: $('#loreScan'), loreFill: $('#loreFill'), loreInvent: $('#loreInvent'),
@@ -44,6 +44,7 @@ function loadState() {
   els.direction.value = localStorage.getItem(STORE.dir) || '';
   els.sysOverride.value = localStorage.getItem(STORE.sys) || '';
   els.matureOk.checked = localStorage.getItem(STORE.mature) === '1';
+  els.genLen.value = localStorage.getItem(STORE.len) || 'couple';
   els.editor.value = localStorage.getItem(STORE.doc) || '';
   els.tempVal.textContent = els.temp.value;
   const end = els.editor.value.length;
@@ -208,6 +209,18 @@ async function fetchModels() {
 
 /* ---------- Prompt building ---------- */
 
+const LENGTHS = {
+  sentence: 'Write exactly one sentence — a single beat — then stop.',
+  few: 'Write two to four sentences, then stop.',
+  para: 'Write one full paragraph, then stop.',
+  couple: 'Write a natural stretch of one to three paragraphs, unless the form of the draft clearly calls for something else (dialogue, verse, a list, etc.).',
+  long: 'Write an extended passage of four to six paragraphs, letting the scene develop fully before you stop.',
+};
+
+function lengthClause() {
+  return '\n\nLength: ' + (LENGTHS[els.genLen.value] || LENGTHS.couple);
+}
+
 function matureClause() {
   return els.matureOk.checked
     ? '\n\nThe author is an adult and this is their private fiction. Mature content — including explicit '
@@ -250,13 +263,13 @@ function systemPrompt(kind, loreText) {
     ? 'You are an expert co-writer. Continue the draft seamlessly from exactly where it leaves off. '
       + 'Match the existing tone, voice, tense, point of view, and formatting. Never repeat or rephrase text '
       + 'that is already in the draft, never summarize, and never add commentary, headings, or quotation marks '
-      + 'around your output. Write only the continuation itself — a natural stretch of one to three paragraphs '
-      + 'unless the form of the draft clearly calls for something else (dialogue, verse, a list, etc.).'
+      + 'around your output. Write only the continuation itself.'
     : 'You are an expert editor. Rewrite the passage the user gives you according to their instruction. '
       + 'Preserve the meaning and any formatting (paragraph breaks, markdown) unless the instruction says otherwise, '
       + 'and match the tone of the surrounding draft. Output only the rewritten passage — no commentary, no quotation '
       + 'marks around it, no explanation of your changes.');
   let out = base + matureClause();
+  if (kind === 'continue') out += lengthClause(); // applies over an override too
   if (loreText) out += '\n\n' + loreText;
   const story = els.story.value.trim();
   if (story && kind !== 'summarize') {
@@ -423,7 +436,7 @@ async function runTask(task) {
     const loreText = loreBlock(matchLore(before + '\n' + after + '\n' + direction));
     if (!before.trim()) {
       // Nothing written yet — let the model open the piece instead of continuing it.
-      let opening = 'The draft is currently empty. Write an opening — one to three paragraphs — that fits the style notes if any were given, or an engaging opening of your choice otherwise.';
+      let opening = 'The draft is currently empty. Write an opening that fits the style notes if any were given, or an engaging opening of your choice otherwise.';
       if (direction) opening += directionBlock(direction);
       messages = [
         { role: 'system', content: systemPrompt('continue', loreText) },
@@ -578,6 +591,7 @@ els.showKey.addEventListener('click', () => {
 });
 els.model.addEventListener('input', () => localStorage.setItem(STORE.model, els.model.value.trim()));
 els.refreshModels.addEventListener('click', fetchModels);
+els.genLen.addEventListener('change', () => localStorage.setItem(STORE.len, els.genLen.value));
 els.temp.addEventListener('input', () => {
   els.tempVal.textContent = els.temp.value;
   localStorage.setItem(STORE.temp, els.temp.value);

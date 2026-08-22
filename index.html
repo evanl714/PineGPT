@@ -82,6 +82,13 @@
   <main class="main">
     <div class="toolbar">
       <button id="btnContinue" type="button" class="primary" title="Continue writing from the cursor (Ctrl+Enter)">&#9998; Continue</button>
+      <select id="genLen" title="How much Continue writes">
+        <option value="sentence">1 sentence</option>
+        <option value="few">2&#8211;4 sentences</option>
+        <option value="para">1 paragraph</option>
+        <option value="couple">1&#8211;3 paragraphs</option>
+        <option value="long">4&#8211;6 paragraphs</option>
+      </select>
       <span class="divider"></span>
       <span class="toolbar-label">Selection:</span>
       <button id="btnImprove" type="button" disabled>Improve</button>

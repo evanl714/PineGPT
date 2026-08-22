@@ -27,6 +27,10 @@ no dependencies.
   appended at the very end of the prompt, where models weight it most, and it
   also activates matching lorebook entries. It clears automatically once a
   continuation is accepted; Enter in the field triggers Continue.
+- **Generation length** — a toolbar selector controls how much Continue
+  writes per press: one sentence, 2–4 sentences, one paragraph, 1–3
+  paragraphs (default), or 4–6 paragraphs. Applies on top of a system
+  prompt override; rewrites are unaffected.
 - **Selection tools** — select any passage and hit **Improve**, **Shorten**,
   **Expand**, or type a custom instruction ("make this angrier", "turn into
   dialogue") and press **Apply**.
