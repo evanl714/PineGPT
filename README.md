@@ -47,7 +47,18 @@ no dependencies.
   when it's relevant. Tag matching is word-boundary aware and
   case-insensitive; entries with no tags are always included; entries can be
   toggled off without deleting them. The sidebar shows how many entries
-  match the current context.
+  match the current context. Three AI tools live in the lorebook: **Fill
+  from draft** writes an entry from what the draft establishes (extractive,
+  no invention), **Invent details** expands an entry with consistent
+  invented specifics, and **Scan draft for entries** proposes ready-made
+  entries for recurring subjects not yet covered — all reviewed in the
+  suggestion panel before anything is saved.
+- **Mature content toggle** — adds standing permission for explicit content
+  to every request. Whether a model honors it depends on the model's own
+  policies; pick accordingly.
+- **System prompt override** — replaces the built-in Continue/rewrite
+  instructions with your own, while lorebook, story notes, style notes, and
+  the mature clause still layer on top.
 - **Model picker** — type any OpenRouter model id, or press ↻ to load the
   live model list and search it.
 - **Autosave** — the draft, key, and settings persist in `localStorage`.

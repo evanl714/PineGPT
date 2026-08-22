@@ -4,7 +4,7 @@ const API_URL = 'https://openrouter.ai/api/v1/chat/completions';
 const MODELS_URL = 'https://openrouter.ai/api/v1/models';
 const CONTEXT_AFTER = 4000;      // chars of draft sent after the cursor
 const SUMMARIZE_LIMIT = 120000;  // max chars of draft sent to the summarizer
-const STORE = { key: 'cw_key', model: 'cw_model', temp: 'cw_temp', style: 'cw_style', doc: 'cw_doc', story: 'cw_story', ctx: 'cw_ctx', lore: 'cw_lore', dir: 'cw_dir' };
+const STORE = { key: 'cw_key', model: 'cw_model', temp: 'cw_temp', style: 'cw_style', doc: 'cw_doc', story: 'cw_story', ctx: 'cw_ctx', lore: 'cw_lore', dir: 'cw_dir', sys: 'cw_sys', mature: 'cw_mature' };
 
 const $ = (s) => document.querySelector(s);
 const els = {
@@ -12,6 +12,8 @@ const els = {
   model: $('#model'), modelList: $('#modelList'), refreshModels: $('#refreshModels'), modelHint: $('#modelHint'),
   temp: $('#temp'), tempVal: $('#tempVal'),
   style: $('#styleNotes'), story: $('#storyNotes'), btnSummarize: $('#btnSummarize'),
+  sysOverride: $('#sysOverride'), matureOk: $('#matureOk'),
+  loreScan: $('#loreScan'), loreFill: $('#loreFill'), loreInvent: $('#loreInvent'),
   ctxSize: $('#ctxSize'), ctxMeter: $('#ctxMeter'), editor: $('#editor'), direction: $('#direction'),
   btnLore: $('#btnLore'), loreCount: $('#loreCount'), loreHint: $('#loreHint'),
   loreModal: $('#loreModal'), loreAdd: $('#loreAdd'), loreClose: $('#loreClose'),
@@ -40,6 +42,8 @@ function loadState() {
   els.story.value = localStorage.getItem(STORE.story) || '';
   els.ctxSize.value = localStorage.getItem(STORE.ctx) || '24000';
   els.direction.value = localStorage.getItem(STORE.dir) || '';
+  els.sysOverride.value = localStorage.getItem(STORE.sys) || '';
+  els.matureOk.checked = localStorage.getItem(STORE.mature) === '1';
   els.editor.value = localStorage.getItem(STORE.doc) || '';
   els.tempVal.textContent = els.temp.value;
   const end = els.editor.value.length;
@@ -204,7 +208,36 @@ async function fetchModels() {
 
 /* ---------- Prompt building ---------- */
 
+function matureClause() {
+  return els.matureOk.checked
+    ? '\n\nThe author is an adult and this is their private fiction. Mature content — including explicit '
+      + 'sexual content, graphic violence, and strong language — is permitted and should be written with the '
+      + 'same craft and specificity as anything else when the story calls for it. Do not water down, fade to '
+      + 'black, or moralize unless the author asks.'
+    : '';
+}
+
 function systemPrompt(kind, loreText) {
+  if (kind === 'lore-fill') {
+    return 'You are an expert story editor maintaining a lorebook. Write a compact lorebook entry (2\u20136 '
+      + 'sentences) about the requested subject, recording only what the draft establishes — traits, '
+      + 'appearance, relationships, deeds, open questions. No speculation, no filler, no headings. '
+      + 'Output only the entry text.' + matureClause();
+  }
+  if (kind === 'lore-invent') {
+    return 'You are a creative worldbuilding partner. Expand the lorebook entry you are given with invented '
+      + 'details that fit the tone of the draft and contradict nothing established — habits, history, quirks, '
+      + 'stakes. Vivid and usable, under 120 words. Output only the complete new entry text, incorporating '
+      + 'the existing facts.' + matureClause();
+  }
+  if (kind === 'lore-scan') {
+    return 'You are an expert story editor. Identify recurring or important characters, places, factions, and '
+      + 'objects in the draft that deserve lorebook entries, skipping every subject in the exclusion list.'
+      + matureClause()
+      + '\n\nReturn strict JSON only: an array of at most 6 objects, each '
+      + '{"name": string, "tags": string of comma-separated trigger words, "content": string of 2\u20134 '
+      + 'sentences recording what the draft establishes}. No commentary, no markdown fences.';
+  }
   if (kind === 'summarize') {
     return 'You are an expert story editor building a working synopsis for the author\u2019s own reference. '
       + 'From the draft you are given, produce compact notes covering: the characters and their key traits and '
@@ -212,7 +245,8 @@ function systemPrompt(kind, loreText) {
       + 'Be specific about names and facts, stay under 300 words, and output only the notes \u2014 no preamble, '
       + 'no commentary.';
   }
-  const base = kind === 'continue'
+  const override = els.sysOverride.value.trim();
+  const base = override || (kind === 'continue'
     ? 'You are an expert co-writer. Continue the draft seamlessly from exactly where it leaves off. '
       + 'Match the existing tone, voice, tense, point of view, and formatting. Never repeat or rephrase text '
       + 'that is already in the draft, never summarize, and never add commentary, headings, or quotation marks '
@@ -221,8 +255,8 @@ function systemPrompt(kind, loreText) {
     : 'You are an expert editor. Rewrite the passage the user gives you according to their instruction. '
       + 'Preserve the meaning and any formatting (paragraph breaks, markdown) unless the instruction says otherwise, '
       + 'and match the tone of the surrounding draft. Output only the rewritten passage — no commentary, no quotation '
-      + 'marks around it, no explanation of your changes.';
-  let out = base;
+      + 'marks around it, no explanation of your changes.');
+  let out = base + matureClause();
   if (loreText) out += '\n\n' + loreText;
   const story = els.story.value.trim();
   if (story && kind !== 'summarize') {
@@ -352,6 +386,34 @@ async function runTask(task) {
       { role: 'user', content: 'Here is the draft:\n\n<draft>\n' + doc.slice(0, SUMMARIZE_LIMIT) + '\n</draft>\n\nWrite the synopsis notes.' },
     ];
     openPanel('Synopsis — accept to add to Story notes');
+  } else if (task.kind === 'lore-fill' || task.kind === 'lore-invent') {
+    const entry = lore.find((x) => x.id === task.entryId);
+    if (!entry) return;
+    const tags = entryTags(entry).join(', ');
+    const subject = `Subject: ${entry.name}${tags ? ` (tags: ${tags})` : ''}`;
+    if (task.kind === 'lore-fill') {
+      messages = [
+        { role: 'system', content: systemPrompt('lore-fill') },
+        { role: 'user', content: 'Here is the draft:\n\n<draft>\n' + doc.slice(0, SUMMARIZE_LIMIT) + '\n</draft>\n\n' + subject + '\n'
+          + (entry.content.trim()
+            ? 'Existing entry — keep what is still true and add what the draft establishes:\n' + entry.content
+            : 'Write a new entry for this subject.') },
+      ];
+    } else {
+      messages = [
+        { role: 'system', content: systemPrompt('lore-invent') },
+        { role: 'user', content: 'For tone, the most recent stretch of the draft:\n\n<draft>\n' + doc.slice(-8000) + '\n</draft>\n\n'
+          + subject + '\nExisting entry:\n' + (entry.content.trim() || '(empty)') + '\n\nExpand it.' },
+      ];
+    }
+    openPanel(`Entry: ${entry.name} — accept to replace content`);
+  } else if (task.kind === 'lore-scan') {
+    const existing = lore.map((e) => e.name + (entryTags(e).length ? ` [${entryTags(e).join(', ')}]` : '')).join('; ') || '(none)';
+    messages = [
+      { role: 'system', content: systemPrompt('lore-scan') },
+      { role: 'user', content: 'Here is the draft:\n\n<draft>\n' + doc.slice(0, SUMMARIZE_LIMIT) + '\n</draft>\n\nAlready covered — do not propose these: ' + existing },
+    ];
+    openPanel('Proposed entries — accept to add');
   } else if (task.kind === 'continue') {
     const limit = ctxLimit();
     const before = doc.slice(Math.max(0, task.cursor - Math.min(limit, task.cursor)), task.cursor);
@@ -422,6 +484,42 @@ function acceptSuggestion() {
   if (!lastTask || !suggestion.trim()) return;
   const doc = els.editor.value;
 
+  if (lastTask.kind === 'lore-scan') {
+    let added;
+    try {
+      const m = suggestion.match(/\[[\s\S]*\]/);
+      const arr = JSON.parse(m ? m[0] : suggestion);
+      added = arr
+        .filter((x) => x && typeof x.name === 'string' && typeof x.content === 'string')
+        .map((x) => ({ id: crypto.randomUUID(), name: x.name, tags: typeof x.tags === 'string' ? x.tags : '', content: x.content, enabled: true }));
+    } catch {
+      els.panelBody.classList.add('error');
+      els.panelBody.textContent = 'Could not parse the response as entries — Retry usually fixes this.';
+      els.btnAccept.hidden = true;
+      return;
+    }
+    lore.push(...added);
+    saveLore();
+    closePanel();
+    els.loreModal.hidden = false;
+    renderLoreList();
+    updateLoreUI();
+    return;
+  }
+
+  if (lastTask.kind === 'lore-fill' || lastTask.kind === 'lore-invent') {
+    const entry = lore.find((x) => x.id === lastTask.entryId);
+    if (entry) {
+      entry.content = suggestion.trim();
+      saveLore();
+    }
+    closePanel();
+    els.loreModal.hidden = false;
+    selectLoreEntry(lastTask.entryId);
+    updateLoreUI();
+    return;
+  }
+
   if (lastTask.kind === 'summarize') {
     const text = suggestion.trim();
     const existing = els.story.value.trim();
@@ -486,6 +584,8 @@ els.temp.addEventListener('input', () => {
 });
 els.style.addEventListener('input', () => localStorage.setItem(STORE.style, els.style.value));
 els.story.addEventListener('input', () => localStorage.setItem(STORE.story, els.story.value));
+els.sysOverride.addEventListener('input', () => localStorage.setItem(STORE.sys, els.sysOverride.value));
+els.matureOk.addEventListener('change', () => localStorage.setItem(STORE.mature, els.matureOk.checked ? '1' : ''));
 els.ctxSize.addEventListener('change', () => {
   localStorage.setItem(STORE.ctx, els.ctxSize.value);
   updateCtxMeter();
@@ -523,6 +623,22 @@ for (const [el, field] of [[els.loreName, 'name'], [els.loreTags, 'tags'], [els.
   });
 }
 
+els.loreScan.addEventListener('click', () => {
+  if (controller || !els.editor.value.trim()) return;
+  els.loreModal.hidden = true;
+  runTask({ kind: 'lore-scan' });
+});
+els.loreFill.addEventListener('click', () => {
+  if (controller || !loreEditingId || !els.editor.value.trim()) return;
+  els.loreModal.hidden = true;
+  runTask({ kind: 'lore-fill', entryId: loreEditingId });
+});
+els.loreInvent.addEventListener('click', () => {
+  if (controller || !loreEditingId) return;
+  els.loreModal.hidden = true;
+  runTask({ kind: 'lore-invent', entryId: loreEditingId });
+});
+
 els.btnSummarize.addEventListener('click', () => {
   if (controller) return;
   if (!els.editor.value.trim()) return;
@@ -554,7 +670,15 @@ els.customInstr.addEventListener('keydown', (e) => {
 els.btnStop.addEventListener('click', () => controller?.abort());
 els.btnAccept.addEventListener('click', acceptSuggestion);
 els.btnRetry.addEventListener('click', () => { if (!controller && lastTask) runTask(lastTask); });
-els.btnDiscard.addEventListener('click', () => { controller?.abort(); closePanel(); els.editor.focus(); });
+els.btnDiscard.addEventListener('click', () => {
+  controller?.abort();
+  closePanel();
+  if (lastTask?.kind?.startsWith('lore-')) {
+    els.loreModal.hidden = false;
+  } else {
+    els.editor.focus();
+  }
+});
 
 els.download.addEventListener('click', () => {
   const blob = new Blob([els.editor.value], { type: 'text/markdown' });

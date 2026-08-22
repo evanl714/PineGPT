@@ -40,6 +40,16 @@
       <textarea id="styleNotes" placeholder="Optional standing instructions, e.g.&#10;&#8226; Literary fiction, close third person, past tense&#10;&#8226; Dry humor, short sentences&#10;&#8226; Never use the word 'suddenly'"></textarea>
     </section>
 
+    <section class="group">
+      <label class="checkline"><input type="checkbox" id="matureOk"> Allow mature content</label>
+      <p class="hint">Adds standing permission for explicit content to every request. What comes back still depends on the model you choose.</p>
+    </section>
+
+    <section class="group">
+      <label for="sysOverride">System prompt override (advanced)</label>
+      <textarea id="sysOverride" placeholder="Optional. Replaces the built-in writing instructions for Continue and rewrites. Lorebook, story notes, and style notes still apply."></textarea>
+    </section>
+
     <section class="group grow">
       <label for="storyNotes">Story notes (always in context)</label>
       <textarea id="storyNotes" placeholder="Characters, setting, plot so far &#8212; facts the model should always know, even when the draft outgrows the context window."></textarea>
@@ -117,7 +127,10 @@
         </div>
       </div>
       <div class="modal-body">
-        <ul id="loreList" class="lore-list"></ul>
+        <div class="lore-left">
+          <button id="loreScan" type="button" class="wide">&#10022; Scan draft for entries</button>
+          <ul id="loreList" class="lore-list"></ul>
+        </div>
         <div id="loreEditor" class="lore-editor" hidden>
           <label for="loreName">Name</label>
           <input type="text" id="loreName" spellcheck="false">
@@ -126,6 +139,9 @@
           <label for="loreContent">Entry</label>
           <textarea id="loreContent" placeholder="Facts the model should know when this comes up&#8230;"></textarea>
           <div class="lore-editor-actions">
+            <button id="loreFill" type="button" title="Write this entry from what the draft establishes">&#10022; Fill from draft</button>
+            <button id="loreInvent" type="button" title="Expand this entry with invented, consistent details">&#10022; Invent details</button>
+            <span class="spacer"></span>
             <button id="loreDelete" type="button" class="danger">Delete entry</button>
           </div>
         </div>
