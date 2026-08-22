@@ -36,6 +36,13 @@ no dependencies.
   entire draft) controls how much recent draft is sent; and a live **context
   meter** shows exactly how much of the draft the model will see, warning
   when earlier text has fallen out of the window.
+- **Lorebook** — entries for characters, places, and facts, each with
+  comma-separated tags. An entry is injected (as canon) only when one of its
+  tags appears in the text actually being sent, so lore costs tokens only
+  when it's relevant. Tag matching is word-boundary aware and
+  case-insensitive; entries with no tags are always included; entries can be
+  toggled off without deleting them. The sidebar shows how many entries
+  match the current context.
 - **Model picker** — type any OpenRouter model id, or press ↻ to load the
   live model list and search it.
 - **Autosave** — the draft, key, and settings persist in `localStorage`.

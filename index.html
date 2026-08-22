@@ -47,6 +47,12 @@
     </section>
 
     <section class="group">
+      <label>Lorebook</label>
+      <button id="btnLore" type="button" class="wide">Manage lorebook (<span id="loreCount">0</span>)</button>
+      <p class="hint" id="loreHint">Entries whose tags appear in the sent context are included automatically.</p>
+    </section>
+
+    <section class="group">
       <label for="ctxSize">Draft context per request</label>
       <select id="ctxSize">
         <option value="8000">Small &#8212; last ~1,500 words</option>
@@ -95,6 +101,33 @@
       </div>
     </div>
   </main>
+
+  <div id="loreModal" class="modal" hidden>
+    <div class="modal-card">
+      <div class="modal-head">
+        <span>Lorebook</span>
+        <div class="row">
+          <button id="loreAdd" type="button">+ New entry</button>
+          <button id="loreClose" type="button">Close</button>
+        </div>
+      </div>
+      <div class="modal-body">
+        <ul id="loreList" class="lore-list"></ul>
+        <div id="loreEditor" class="lore-editor" hidden>
+          <label for="loreName">Name</label>
+          <input type="text" id="loreName" spellcheck="false">
+          <label for="loreTags">Tags &#8212; comma-separated; empty = always included</label>
+          <input type="text" id="loreTags" placeholder="Ilsa, captain, the Vagrant" spellcheck="false">
+          <label for="loreContent">Entry</label>
+          <textarea id="loreContent" placeholder="Facts the model should know when this comes up&#8230;"></textarea>
+          <div class="lore-editor-actions">
+            <button id="loreDelete" type="button" class="danger">Delete entry</button>
+          </div>
+        </div>
+        <p id="loreEmpty" class="hint">No entries yet &#8212; add characters, places, factions, running jokes. When an entry&#8217;s tag shows up in the text sent to the model, the entry rides along as canon.</p>
+      </div>
+    </div>
+  </div>
 
   <script src="app.js"></script>
 </body>

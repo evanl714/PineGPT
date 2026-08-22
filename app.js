@@ -4,7 +4,7 @@ const API_URL = 'https://openrouter.ai/api/v1/chat/completions';
 const MODELS_URL = 'https://openrouter.ai/api/v1/models';
 const CONTEXT_AFTER = 4000;      // chars of draft sent after the cursor
 const SUMMARIZE_LIMIT = 120000;  // max chars of draft sent to the summarizer
-const STORE = { key: 'cw_key', model: 'cw_model', temp: 'cw_temp', style: 'cw_style', doc: 'cw_doc', story: 'cw_story', ctx: 'cw_ctx' };
+const STORE = { key: 'cw_key', model: 'cw_model', temp: 'cw_temp', style: 'cw_style', doc: 'cw_doc', story: 'cw_story', ctx: 'cw_ctx', lore: 'cw_lore' };
 
 const $ = (s) => document.querySelector(s);
 const els = {
@@ -13,6 +13,11 @@ const els = {
   temp: $('#temp'), tempVal: $('#tempVal'),
   style: $('#styleNotes'), story: $('#storyNotes'), btnSummarize: $('#btnSummarize'),
   ctxSize: $('#ctxSize'), ctxMeter: $('#ctxMeter'), editor: $('#editor'),
+  btnLore: $('#btnLore'), loreCount: $('#loreCount'), loreHint: $('#loreHint'),
+  loreModal: $('#loreModal'), loreAdd: $('#loreAdd'), loreClose: $('#loreClose'),
+  loreList: $('#loreList'), loreEditor: $('#loreEditor'), loreEmpty: $('#loreEmpty'),
+  loreName: $('#loreName'), loreTags: $('#loreTags'), loreContent: $('#loreContent'),
+  loreDelete: $('#loreDelete'),
   wordCount: $('#wordCount'), saveState: $('#saveState'), download: $('#download'),
   btnContinue: $('#btnContinue'), btnImprove: $('#btnImprove'), btnShorten: $('#btnShorten'),
   btnExpand: $('#btnExpand'), customInstr: $('#customInstr'), btnCustom: $('#btnCustom'),
@@ -40,6 +45,8 @@ function loadState() {
   els.editor.setSelectionRange(end, end);
   updateWordCount();
   updateCtxMeter();
+  renderLoreList();
+  updateLoreUI();
 }
 
 let saveTimer = null;
@@ -81,6 +88,96 @@ function updateCtxMeter() {
   }
 }
 
+/* ---------- Lorebook ---------- */
+
+let lore = (() => {
+  try { return JSON.parse(localStorage.getItem(STORE.lore)) || []; } catch { return []; }
+})();
+let loreEditingId = null;
+
+function saveLore() {
+  localStorage.setItem(STORE.lore, JSON.stringify(lore));
+}
+
+function tagMatches(tag, text) {
+  const esc = tag.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  // Unicode-aware word boundaries so tags like "Ilsa" don't fire inside "Ailsa".
+  return new RegExp(`(?:^|[^\\p{L}\\p{N}])${esc}(?:[^\\p{L}\\p{N}]|$)`, 'iu').test(text);
+}
+
+function entryTags(e) {
+  return e.tags.split(',').map((t) => t.trim()).filter(Boolean);
+}
+
+// Entries that apply to the given text: enabled, with content, and either
+// tagless (always on) or with at least one tag present in the text.
+function matchLore(text) {
+  return lore.filter((e) => e.enabled && e.content.trim()
+    && (entryTags(e).length === 0 || entryTags(e).some((t) => tagMatches(t, text))));
+}
+
+function loreBlock(entries) {
+  if (!entries.length) return '';
+  return 'Lorebook — canon reference for people, places, and things that appear in the passage:\n\n'
+    + entries.map((e) => `### ${e.name}\n${e.content.trim()}`).join('\n\n');
+}
+
+function renderLoreList() {
+  els.loreList.replaceChildren(...lore.map((e) => {
+    const li = document.createElement('li');
+    li.className = (e.id === loreEditingId ? 'active ' : '') + (e.enabled ? '' : 'off');
+    const cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.checked = e.enabled;
+    cb.title = 'Enable/disable entry';
+    cb.addEventListener('click', (ev) => {
+      ev.stopPropagation();
+      e.enabled = cb.checked;
+      saveLore();
+      updateLoreUI();
+    });
+    const text = document.createElement('div');
+    text.className = 'lore-item-text';
+    const name = document.createElement('span');
+    name.className = 'lore-name';
+    name.textContent = e.name || '(unnamed)';
+    const tags = document.createElement('span');
+    tags.className = 'lore-tags';
+    tags.textContent = entryTags(e).join(', ') || 'always included';
+    text.append(name, tags);
+    li.append(cb, text);
+    li.addEventListener('click', () => selectLoreEntry(e.id));
+    return li;
+  }));
+  els.loreEmpty.hidden = lore.length > 0;
+}
+
+function selectLoreEntry(id) {
+  loreEditingId = id;
+  const e = lore.find((x) => x.id === id);
+  els.loreEditor.hidden = !e;
+  if (e) {
+    els.loreName.value = e.name;
+    els.loreTags.value = e.tags;
+    els.loreContent.value = e.content;
+  }
+  renderLoreList();
+}
+
+// The idle hint approximates a request from the end of the draft.
+function updateLoreUI() {
+  els.loreCount.textContent = lore.length;
+  if (!lore.length) {
+    els.loreHint.textContent = 'Entries whose tags appear in the sent context are included automatically.';
+  } else {
+    const doc = els.editor.value;
+    const limit = ctxLimit();
+    const scan = doc.slice(Math.max(0, doc.length - Math.min(limit, doc.length)));
+    const n = matchLore(scan).length;
+    els.loreHint.textContent = `${n} of ${lore.length} ${lore.length === 1 ? 'entry' : 'entries'} match the current context.`;
+  }
+}
+
 /* ---------- Model list ---------- */
 
 async function fetchModels() {
@@ -106,7 +203,7 @@ async function fetchModels() {
 
 /* ---------- Prompt building ---------- */
 
-function systemPrompt(kind) {
+function systemPrompt(kind, loreText) {
   if (kind === 'summarize') {
     return 'You are an expert story editor building a working synopsis for the author\u2019s own reference. '
       + 'From the draft you are given, produce compact notes covering: the characters and their key traits and '
@@ -125,6 +222,7 @@ function systemPrompt(kind) {
       + 'and match the tone of the surrounding draft. Output only the rewritten passage — no commentary, no quotation '
       + 'marks around it, no explanation of your changes.';
   let out = base;
+  if (loreText) out += '\n\n' + loreText;
   const story = els.story.value.trim();
   if (story && kind !== 'summarize') {
     out += `\n\nEstablished story/project notes — treat these as canon even if the draft excerpt does not mention them:\n${story}`;
@@ -250,15 +348,16 @@ async function runTask(task) {
     const limit = ctxLimit();
     const before = doc.slice(Math.max(0, task.cursor - Math.min(limit, task.cursor)), task.cursor);
     const after = doc.slice(task.cursor, task.cursor + CONTEXT_AFTER);
+    const loreText = loreBlock(matchLore(before + '\n' + after));
     if (!before.trim()) {
       // Nothing written yet — let the model open the piece instead of continuing it.
       messages = [
-        { role: 'system', content: systemPrompt('continue') },
+        { role: 'system', content: systemPrompt('continue', loreText) },
         { role: 'user', content: 'The draft is currently empty. Write an opening — one to three paragraphs — that fits the style notes if any were given, or an engaging opening of your choice otherwise.' },
       ];
     } else {
       messages = [
-        { role: 'system', content: systemPrompt('continue') },
+        { role: 'system', content: systemPrompt('continue', loreText) },
         { role: 'user', content: continueUserMessage(before, after) },
       ];
     }
@@ -267,8 +366,9 @@ async function runTask(task) {
     const passage = doc.slice(task.selStart, task.selEnd);
     const before = doc.slice(Math.max(0, task.selStart - 2000), task.selStart);
     const after = doc.slice(task.selEnd, task.selEnd + 2000);
+    const loreText = loreBlock(matchLore(before + passage + after));
     messages = [
-      { role: 'system', content: systemPrompt('rewrite') },
+      { role: 'system', content: systemPrompt('rewrite', loreText) },
       { role: 'user', content: rewriteUserMessage(task.instruction, passage, before, after) },
     ];
     openPanel(`Rewrite — ${task.instruction.length > 40 ? task.instruction.slice(0, 40) + '…' : task.instruction}`);
@@ -375,14 +475,47 @@ els.story.addEventListener('input', () => localStorage.setItem(STORE.story, els.
 els.ctxSize.addEventListener('change', () => {
   localStorage.setItem(STORE.ctx, els.ctxSize.value);
   updateCtxMeter();
+  updateLoreUI();
 });
+els.btnLore.addEventListener('click', () => { els.loreModal.hidden = false; });
+els.loreClose.addEventListener('click', () => { els.loreModal.hidden = true; updateLoreUI(); });
+els.loreModal.addEventListener('click', (e) => {
+  if (e.target === els.loreModal) { els.loreModal.hidden = true; updateLoreUI(); }
+});
+els.loreAdd.addEventListener('click', () => {
+  const entry = { id: crypto.randomUUID(), name: 'New entry', tags: '', content: '', enabled: true };
+  lore.push(entry);
+  saveLore();
+  selectLoreEntry(entry.id);
+  updateLoreUI();
+  els.loreName.select();
+});
+els.loreDelete.addEventListener('click', () => {
+  lore = lore.filter((e) => e.id !== loreEditingId);
+  loreEditingId = null;
+  els.loreEditor.hidden = true;
+  saveLore();
+  renderLoreList();
+  updateLoreUI();
+});
+for (const [el, field] of [[els.loreName, 'name'], [els.loreTags, 'tags'], [els.loreContent, 'content']]) {
+  el.addEventListener('input', () => {
+    const e = lore.find((x) => x.id === loreEditingId);
+    if (!e) return;
+    e[field] = el.value;
+    saveLore();
+    renderLoreList();
+    updateLoreUI();
+  });
+}
+
 els.btnSummarize.addEventListener('click', () => {
   if (controller) return;
   if (!els.editor.value.trim()) return;
   runTask({ kind: 'summarize' });
 });
 
-els.editor.addEventListener('input', () => { saveDoc(); updateWordCount(); updateCtxMeter(); });
+els.editor.addEventListener('input', () => { saveDoc(); updateWordCount(); updateCtxMeter(); updateLoreUI(); });
 document.addEventListener('selectionchange', () => {
   if (controller) return;
   // A textarea keeps its selection while blurred, so no focus check —
@@ -418,6 +551,9 @@ document.addEventListener('keydown', (e) => {
   if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
     e.preventDefault();
     startContinue();
+  } else if (e.key === 'Escape' && !els.loreModal.hidden) {
+    els.loreModal.hidden = true;
+    updateLoreUI();
   } else if (e.key === 'Escape' && !els.panel.hidden) {
     controller?.abort();
     closePanel();
