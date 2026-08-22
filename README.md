@@ -31,6 +31,16 @@ no dependencies.
   writes per press: one sentence, 2–4 sentences, one paragraph, 1–3
   paragraphs (default), or 4–6 paragraphs. Applies on top of a system
   prompt override; rewrites are unaffected.
+- **Formatting** — generated prose puts each speaker's dialogue in its own
+  paragraph (toggleable), marks scene breaks with `***` lines, and opens
+  chapters with "Chapter N" lines. Toolbar Insert buttons add a scene break
+  or the next auto-numbered chapter heading at the cursor.
+- **Structure-aware references** — the app parses "Chapter N" headings and
+  `***` breaks into a chapter/scene map. Reference "chapter 2, scene 3" in
+  the Next: bar and that passage is sent to the model as labeled reference
+  text — a live indicator shows what the reference resolves to (or warns if
+  it doesn't exist). A scene number alone resolves within the chapter the
+  cursor is in, and the model is told where the insertion point sits.
 - **Selection tools** — select any passage and hit **Improve**, **Shorten**,
   **Expand**, or type a custom instruction ("make this angrier", "turn into
   dialogue") and press **Apply**.

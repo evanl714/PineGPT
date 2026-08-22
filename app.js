@@ -4,13 +4,14 @@ const API_URL = 'https://openrouter.ai/api/v1/chat/completions';
 const MODELS_URL = 'https://openrouter.ai/api/v1/models';
 const CONTEXT_AFTER = 4000;      // chars of draft sent after the cursor
 const SUMMARIZE_LIMIT = 120000;  // max chars of draft sent to the summarizer
-const STORE = { key: 'cw_key', model: 'cw_model', temp: 'cw_temp', style: 'cw_style', doc: 'cw_doc', story: 'cw_story', ctx: 'cw_ctx', lore: 'cw_lore', dir: 'cw_dir', sys: 'cw_sys', mature: 'cw_mature', len: 'cw_len' };
+const STORE = { key: 'cw_key', model: 'cw_model', temp: 'cw_temp', style: 'cw_style', doc: 'cw_doc', story: 'cw_story', ctx: 'cw_ctx', lore: 'cw_lore', dir: 'cw_dir', sys: 'cw_sys', mature: 'cw_mature', len: 'cw_len', dlg: 'cw_dlg' };
 
 const $ = (s) => document.querySelector(s);
 const els = {
   key: $('#apiKey'), showKey: $('#showKey'),
   model: $('#model'), modelList: $('#modelList'), refreshModels: $('#refreshModels'), modelHint: $('#modelHint'),
   temp: $('#temp'), tempVal: $('#tempVal'), genLen: $('#genLen'),
+  dlgFmt: $('#dlgFmt'), btnSceneBreak: $('#btnSceneBreak'), btnChapterBreak: $('#btnChapterBreak'), dirRef: $('#dirRef'),
   style: $('#styleNotes'), story: $('#storyNotes'), btnSummarize: $('#btnSummarize'),
   sysOverride: $('#sysOverride'), matureOk: $('#matureOk'),
   loreScan: $('#loreScan'), loreFill: $('#loreFill'), loreInvent: $('#loreInvent'),
@@ -45,6 +46,7 @@ function loadState() {
   els.sysOverride.value = localStorage.getItem(STORE.sys) || '';
   els.matureOk.checked = localStorage.getItem(STORE.mature) === '1';
   els.genLen.value = localStorage.getItem(STORE.len) || 'couple';
+  els.dlgFmt.checked = localStorage.getItem(STORE.dlg) !== '0';
   els.editor.value = localStorage.getItem(STORE.doc) || '';
   els.tempVal.textContent = els.temp.value;
   const end = els.editor.value.length;
@@ -53,6 +55,7 @@ function loadState() {
   updateCtxMeter();
   renderLoreList();
   updateLoreUI();
+  updateDirRef();
 }
 
 let saveTimer = null;
@@ -91,6 +94,102 @@ function updateCtxMeter() {
     const sent = countWords(doc.slice(doc.length - limit));
     els.ctxMeter.textContent = `Sending the last ~${sent} of ${countWords(doc)} words. Earlier text is invisible to the model — use Summarize to keep Story notes current.`;
     els.ctxMeter.classList.add('warn');
+  }
+}
+
+/* ---------- Document structure (chapters & scenes) ---------- */
+
+const CHAPTER_RE = /^[ \t]*chapter\s+(\d+)\b[^\n]*$/gim;
+const SCENE_BREAK_RE = /^[ \t]*(?:\*[ \t]*\*[ \t]*\*|-{3,})[ \t]*$/gm;
+
+// Chapters are "Chapter N" heading lines; scenes split each chapter on *** lines.
+function parseStructure(doc) {
+  const heads = [];
+  CHAPTER_RE.lastIndex = 0;
+  let m;
+  while ((m = CHAPTER_RE.exec(doc))) {
+    heads.push({ index: m.index, bodyStart: m.index + m[0].length, num: parseInt(m[1], 10), label: `Chapter ${parseInt(m[1], 10)}` });
+  }
+  const chapters = [];
+  if (!heads.length) {
+    chapters.push({ num: null, label: null, start: 0, bodyStart: 0, end: doc.length });
+  } else {
+    if (heads[0].index > 0) {
+      chapters.push({ num: null, label: 'the front matter before Chapter 1', start: 0, bodyStart: 0, end: heads[0].index });
+    }
+    heads.forEach((h, i) => chapters.push({
+      num: h.num, label: h.label, start: h.index, bodyStart: h.bodyStart,
+      end: i + 1 < heads.length ? heads[i + 1].index : doc.length,
+    }));
+  }
+  for (const c of chapters) {
+    const body = doc.slice(c.bodyStart, c.end);
+    SCENE_BREAK_RE.lastIndex = 0;
+    const bounds = [];
+    let last = 0;
+    let b;
+    while ((b = SCENE_BREAK_RE.exec(body))) {
+      bounds.push([last, b.index]);
+      last = b.index + b[0].length;
+    }
+    bounds.push([last, body.length]);
+    c.scenes = bounds.map(([a, z]) => ({ start: c.bodyStart + a, end: c.bodyStart + z }));
+  }
+  return chapters;
+}
+
+function chapterByNum(chapters, n) {
+  return chapters.find((c) => c.num === n) || null;
+}
+
+function chapterAt(chapters, pos) {
+  return chapters.find((c) => pos >= c.start && pos <= c.end) || chapters[chapters.length - 1];
+}
+
+// "Chapter 2, Scene 3" for the position, or null when the draft has no structure markers.
+function locateCursor(doc, pos) {
+  const chapters = parseStructure(doc);
+  if (chapters.length === 1 && chapters[0].num === null && chapters[0].scenes.length === 1) return null;
+  const c = chapterAt(chapters, pos);
+  const sceneIdx = c.scenes.findIndex((sc) => pos >= sc.start && pos <= sc.end);
+  const scenePart = c.scenes.length > 1 && sceneIdx >= 0 ? `, Scene ${sceneIdx + 1}` : '';
+  return (c.label || 'the draft') + scenePart;
+}
+
+// Resolve "chapter 2, scene 3" style references in the direction text.
+function resolveDirectionRef(doc, direction, cursor) {
+  const cm = /chapter\s+(\d+)/i.exec(direction);
+  const sm = /scene\s+(\d+)/i.exec(direction);
+  if (!cm && !sm) return null;
+  const chapters = parseStructure(doc);
+  const chapter = cm ? chapterByNum(chapters, parseInt(cm[1], 10)) : chapterAt(chapters, cursor);
+  const label = (cm ? `Chapter ${cm[1]}` : (chapter?.label || 'this chapter')) + (sm ? `, Scene ${sm[1]}` : '');
+  if (!chapter) return { found: false, label };
+  let start = chapter.start;
+  let end = chapter.end;
+  if (sm) {
+    const sc = chapter.scenes[parseInt(sm[1], 10) - 1];
+    if (!sc) return { found: false, label };
+    start = sc.start;
+    end = sc.end;
+  }
+  let text = doc.slice(start, end).trim();
+  if (!text) return { found: false, label };
+  if (text.length > 8000) text = text.slice(0, 8000) + '\n[… excerpt truncated]';
+  return { found: true, label, text };
+}
+
+function updateDirRef() {
+  const direction = els.direction.value.trim();
+  const resolved = direction ? resolveDirectionRef(els.editor.value, direction, els.editor.selectionEnd) : null;
+  els.dirRef.classList.remove('warn');
+  if (!resolved) {
+    els.dirRef.textContent = '';
+  } else if (resolved.found) {
+    els.dirRef.textContent = `\u21b3 ${resolved.label}, ~${countWords(resolved.text)} words`;
+  } else {
+    els.dirRef.textContent = `\u26a0 ${resolved.label} not found`;
+    els.dirRef.classList.add('warn');
   }
 }
 
@@ -221,6 +320,14 @@ function lengthClause() {
   return '\n\nLength: ' + (LENGTHS[els.genLen.value] || LENGTHS.couple);
 }
 
+function formattingClause() {
+  let out = '\n\nFormatting: Mark a scene break with a line containing only ***. Begin a chapter with a line like \u201cChapter 3\u201d.';
+  if (els.dlgFmt.checked) {
+    out += ' Dialogue gets its own paragraph: every change of speaker starts a new line, and spoken lines are never buried inside a narrative paragraph.';
+  }
+  return out;
+}
+
 function matureClause() {
   return els.matureOk.checked
     ? '\n\nThe author is an adult and this is their private fiction. Mature content — including explicit '
@@ -270,6 +377,7 @@ function systemPrompt(kind, loreText) {
       + 'marks around it, no explanation of your changes.');
   let out = base + matureClause();
   if (kind === 'continue') out += lengthClause(); // applies over an override too
+  out += formattingClause();
   if (loreText) out += '\n\n' + loreText;
   const story = els.story.value.trim();
   if (story && kind !== 'summarize') {
@@ -286,14 +394,19 @@ function directionBlock(direction) {
     + '\nFollow the direction faithfully, but render it as prose in the draft\u2019s voice; never quote it or acknowledge it as an instruction.';
 }
 
-function continueUserMessage(before, after, direction) {
+function continueUserMessage(before, after, direction, resolved, location) {
   let msg = 'Here is my draft, up to the point where I need you to continue:\n\n'
     + '<draft>\n' + before + '\n</draft>\n\n';
   if (after.trim()) {
     msg += 'The draft resumes AFTER the insertion point with the following text, so your continuation must '
       + 'bridge into it naturally without repeating it:\n\n<later_text>\n' + after + '\n</later_text>\n\n';
   }
+  if (resolved?.found) {
+    msg += 'The author\u2019s direction refers to this passage from earlier in the manuscript (' + resolved.label + '):\n\n<referenced>\n'
+      + resolved.text + '\n</referenced>\n\n';
+  }
   msg += 'Continue writing from the exact end of the draft.';
+  if (location) msg += ` The insertion point is in ${location}.`;
   if (direction) msg += directionBlock(direction);
   return msg;
 }
@@ -432,8 +545,10 @@ async function runTask(task) {
     const before = doc.slice(Math.max(0, task.cursor - Math.min(limit, task.cursor)), task.cursor);
     const after = doc.slice(task.cursor, task.cursor + CONTEXT_AFTER);
     const direction = els.direction.value.trim();
-    // The direction joins the lore scan so naming a character in it activates their entry.
-    const loreText = loreBlock(matchLore(before + '\n' + after + '\n' + direction));
+    const resolved = direction ? resolveDirectionRef(doc, direction, task.cursor) : null;
+    const location = locateCursor(doc, task.cursor);
+    // Direction and any referenced passage join the lore scan so their subjects' entries activate.
+    const loreText = loreBlock(matchLore(before + '\n' + after + '\n' + direction + '\n' + (resolved?.found ? resolved.text : '')));
     if (!before.trim()) {
       // Nothing written yet — let the model open the piece instead of continuing it.
       let opening = 'The draft is currently empty. Write an opening that fits the style notes if any were given, or an engaging opening of your choice otherwise.';
@@ -445,7 +560,7 @@ async function runTask(task) {
     } else {
       messages = [
         { role: 'system', content: systemPrompt('continue', loreText) },
-        { role: 'user', content: continueUserMessage(before, after, direction) },
+        { role: 'user', content: continueUserMessage(before, after, direction, resolved, location) },
       ];
     }
     openPanel('Continuation');
@@ -565,6 +680,23 @@ function acceptSuggestion() {
   updateWordCount();
 }
 
+function insertAtCursor(snippet) {
+  const doc = els.editor.value;
+  const pos = els.editor.selectionEnd;
+  const before = doc.slice(0, pos);
+  const prefix = before === '' || before.endsWith('\n\n') ? '' : before.endsWith('\n') ? '\n' : '\n\n';
+  const text = prefix + snippet;
+  els.editor.value = before + text + doc.slice(pos);
+  const at = pos + text.length;
+  els.editor.setSelectionRange(at, at);
+  els.editor.focus();
+  saveDoc();
+  updateWordCount();
+  updateCtxMeter();
+  updateLoreUI();
+  updateDirRef();
+}
+
 function startContinue() {
   if (controller) return;
   const cursor = els.editor.selectionEnd; // retained even while the textarea is blurred
@@ -592,6 +724,12 @@ els.showKey.addEventListener('click', () => {
 els.model.addEventListener('input', () => localStorage.setItem(STORE.model, els.model.value.trim()));
 els.refreshModels.addEventListener('click', fetchModels);
 els.genLen.addEventListener('change', () => localStorage.setItem(STORE.len, els.genLen.value));
+els.dlgFmt.addEventListener('change', () => localStorage.setItem(STORE.dlg, els.dlgFmt.checked ? '1' : '0'));
+els.btnSceneBreak.addEventListener('click', () => insertAtCursor('***\n\n'));
+els.btnChapterBreak.addEventListener('click', () => {
+  const nums = [...els.editor.value.matchAll(/^[ \t]*chapter\s+(\d+)\b/gim)].map((m) => parseInt(m[1], 10));
+  insertAtCursor(`Chapter ${nums.length ? Math.max(...nums) + 1 : 1}\n\n`);
+});
 els.temp.addEventListener('input', () => {
   els.tempVal.textContent = els.temp.value;
   localStorage.setItem(STORE.temp, els.temp.value);
@@ -625,6 +763,7 @@ els.loreDelete.addEventListener('click', () => {
   saveLore();
   renderLoreList();
   updateLoreUI();
+  updateDirRef();
 });
 for (const [el, field] of [[els.loreName, 'name'], [els.loreTags, 'tags'], [els.loreContent, 'content']]) {
   el.addEventListener('input', () => {
@@ -659,7 +798,7 @@ els.btnSummarize.addEventListener('click', () => {
   runTask({ kind: 'summarize' });
 });
 
-els.editor.addEventListener('input', () => { saveDoc(); updateWordCount(); updateCtxMeter(); updateLoreUI(); });
+els.editor.addEventListener('input', () => { saveDoc(); updateWordCount(); updateCtxMeter(); updateLoreUI(); updateDirRef(); });
 document.addEventListener('selectionchange', () => {
   if (controller) return;
   // A textarea keeps its selection while blurred, so no focus check —
@@ -669,7 +808,7 @@ document.addEventListener('selectionchange', () => {
 });
 
 els.btnContinue.addEventListener('click', startContinue);
-els.direction.addEventListener('input', () => localStorage.setItem(STORE.dir, els.direction.value));
+els.direction.addEventListener('input', () => { localStorage.setItem(STORE.dir, els.direction.value); updateDirRef(); });
 els.direction.addEventListener('keydown', (e) => {
   if (e.key === 'Enter') { e.preventDefault(); startContinue(); }
 });

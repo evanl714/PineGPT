@@ -41,6 +41,11 @@
     </section>
 
     <section class="group">
+      <label class="checkline"><input type="checkbox" id="dlgFmt" checked> Dialogue on its own line</label>
+      <p class="hint">Generated prose gives each speaker a new paragraph. Scene breaks are <code>***</code> lines, chapters are &#8220;Chapter N&#8221; lines &#8212; the Insert tools and the &#8220;Next:&#8221; bar&#8217;s chapter/scene references both use these markers.</p>
+    </section>
+
+    <section class="group">
       <label class="checkline"><input type="checkbox" id="matureOk"> Allow mature content</label>
       <p class="hint">Adds standing permission for explicit content to every request. What comes back still depends on the model you choose.</p>
     </section>
@@ -96,6 +101,10 @@
       <button id="btnExpand" type="button" disabled>Expand</button>
       <input type="text" id="customInstr" placeholder="Custom instruction for selection&#8230; e.g. 'make this angrier'">
       <button id="btnCustom" type="button" disabled>Apply</button>
+      <span class="divider"></span>
+      <span class="toolbar-label">Insert:</span>
+      <button id="btnSceneBreak" type="button" title="Insert a *** scene break at the cursor">*** Scene</button>
+      <button id="btnChapterBreak" type="button" title="Insert the next numbered chapter heading at the cursor">Chapter</button>
       <span class="spacer"></span>
       <span id="wordCount" class="meta">0 words</span>
       <span id="saveState" class="meta"></span>
@@ -103,7 +112,8 @@
 
     <div class="direction-bar">
       <label class="toolbar-label" for="direction">Next:</label>
-      <input type="text" id="direction" placeholder="Steer the next continuation &#8212; e.g. 'Marla finally leaves the house'. Cleared when a continuation is accepted.">
+      <input type="text" id="direction" placeholder="Steer the next continuation &#8212; e.g. 'Marla finally leaves the house', or reference 'chapter 2, scene 3'. Cleared when a continuation is accepted.">
+      <span id="dirRef" class="meta"></span>
     </div>
 
     <div class="editor-wrap">
