@@ -4,7 +4,7 @@ const API_URL = 'https://openrouter.ai/api/v1/chat/completions';
 const MODELS_URL = 'https://openrouter.ai/api/v1/models';
 const CONTEXT_AFTER = 4000;      // chars of draft sent after the cursor
 const SUMMARIZE_LIMIT = 120000;  // max chars of draft sent to the summarizer
-const STORE = { key: 'cw_key', model: 'cw_model', temp: 'cw_temp', style: 'cw_style', doc: 'cw_doc', story: 'cw_story', ctx: 'cw_ctx', lore: 'cw_lore' };
+const STORE = { key: 'cw_key', model: 'cw_model', temp: 'cw_temp', style: 'cw_style', doc: 'cw_doc', story: 'cw_story', ctx: 'cw_ctx', lore: 'cw_lore', dir: 'cw_dir' };
 
 const $ = (s) => document.querySelector(s);
 const els = {
@@ -12,7 +12,7 @@ const els = {
   model: $('#model'), modelList: $('#modelList'), refreshModels: $('#refreshModels'), modelHint: $('#modelHint'),
   temp: $('#temp'), tempVal: $('#tempVal'),
   style: $('#styleNotes'), story: $('#storyNotes'), btnSummarize: $('#btnSummarize'),
-  ctxSize: $('#ctxSize'), ctxMeter: $('#ctxMeter'), editor: $('#editor'),
+  ctxSize: $('#ctxSize'), ctxMeter: $('#ctxMeter'), editor: $('#editor'), direction: $('#direction'),
   btnLore: $('#btnLore'), loreCount: $('#loreCount'), loreHint: $('#loreHint'),
   loreModal: $('#loreModal'), loreAdd: $('#loreAdd'), loreClose: $('#loreClose'),
   loreList: $('#loreList'), loreEditor: $('#loreEditor'), loreEmpty: $('#loreEmpty'),
@@ -39,6 +39,7 @@ function loadState() {
   els.style.value = localStorage.getItem(STORE.style) || '';
   els.story.value = localStorage.getItem(STORE.story) || '';
   els.ctxSize.value = localStorage.getItem(STORE.ctx) || '24000';
+  els.direction.value = localStorage.getItem(STORE.dir) || '';
   els.editor.value = localStorage.getItem(STORE.doc) || '';
   els.tempVal.textContent = els.temp.value;
   const end = els.editor.value.length;
@@ -232,7 +233,13 @@ function systemPrompt(kind, loreText) {
   return out;
 }
 
-function continueUserMessage(before, after) {
+function directionBlock(direction) {
+  return '\n\nAuthorial direction — the passage you write next must depict this happening:\n'
+    + direction
+    + '\nFollow the direction faithfully, but render it as prose in the draft\u2019s voice; never quote it or acknowledge it as an instruction.';
+}
+
+function continueUserMessage(before, after, direction) {
   let msg = 'Here is my draft, up to the point where I need you to continue:\n\n'
     + '<draft>\n' + before + '\n</draft>\n\n';
   if (after.trim()) {
@@ -240,6 +247,7 @@ function continueUserMessage(before, after) {
       + 'bridge into it naturally without repeating it:\n\n<later_text>\n' + after + '\n</later_text>\n\n';
   }
   msg += 'Continue writing from the exact end of the draft.';
+  if (direction) msg += directionBlock(direction);
   return msg;
 }
 
@@ -348,17 +356,21 @@ async function runTask(task) {
     const limit = ctxLimit();
     const before = doc.slice(Math.max(0, task.cursor - Math.min(limit, task.cursor)), task.cursor);
     const after = doc.slice(task.cursor, task.cursor + CONTEXT_AFTER);
-    const loreText = loreBlock(matchLore(before + '\n' + after));
+    const direction = els.direction.value.trim();
+    // The direction joins the lore scan so naming a character in it activates their entry.
+    const loreText = loreBlock(matchLore(before + '\n' + after + '\n' + direction));
     if (!before.trim()) {
       // Nothing written yet — let the model open the piece instead of continuing it.
+      let opening = 'The draft is currently empty. Write an opening — one to three paragraphs — that fits the style notes if any were given, or an engaging opening of your choice otherwise.';
+      if (direction) opening += directionBlock(direction);
       messages = [
         { role: 'system', content: systemPrompt('continue', loreText) },
-        { role: 'user', content: 'The draft is currently empty. Write an opening — one to three paragraphs — that fits the style notes if any were given, or an engaging opening of your choice otherwise.' },
+        { role: 'user', content: opening },
       ];
     } else {
       messages = [
         { role: 'system', content: systemPrompt('continue', loreText) },
-        { role: 'user', content: continueUserMessage(before, after) },
+        { role: 'user', content: continueUserMessage(before, after, direction) },
       ];
     }
     openPanel('Continuation');
@@ -428,6 +440,8 @@ function acceptSuggestion() {
     els.editor.value = before + text + doc.slice(lastTask.cursor);
     const pos = (before + text).length;
     els.editor.setSelectionRange(pos, pos);
+    els.direction.value = '';
+    localStorage.setItem(STORE.dir, '');
   } else {
     const text = suggestion.replace(/\s+$/, '');
     els.editor.value = doc.slice(0, lastTask.selStart) + text + doc.slice(lastTask.selEnd);
@@ -525,6 +539,10 @@ document.addEventListener('selectionchange', () => {
 });
 
 els.btnContinue.addEventListener('click', startContinue);
+els.direction.addEventListener('input', () => localStorage.setItem(STORE.dir, els.direction.value));
+els.direction.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') { e.preventDefault(); startContinue(); }
+});
 els.btnImprove.addEventListener('click', () => startRewrite('Improve this passage: tighten the prose, sharpen word choice, and fix any awkwardness, while keeping the meaning and roughly the same length.'));
 els.btnShorten.addEventListener('click', () => startRewrite('Shorten this passage to roughly half its length while keeping every essential point and the same tone.'));
 els.btnExpand.addEventListener('click', () => startRewrite('Expand this passage with more detail, texture, and development, roughly doubling its length, in the same voice.'));

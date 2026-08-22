@@ -22,6 +22,11 @@ no dependencies.
 - **Continue** (`Ctrl`/`Cmd`+`Enter`) — the model picks up from your cursor,
   matching the draft's tone and voice. If text follows the cursor, the
   continuation is asked to bridge into it.
+- **Direction ("Next:" bar)** — type what should happen next ("Marla finally
+  leaves the house") and Continue renders it as prose. The direction is
+  appended at the very end of the prompt, where models weight it most, and it
+  also activates matching lorebook entries. It clears automatically once a
+  continuation is accepted; Enter in the field triggers Continue.
 - **Selection tools** — select any passage and hit **Improve**, **Shorten**,
   **Expand**, or type a custom instruction ("make this angrier", "turn into
   dialogue") and press **Apply**.
