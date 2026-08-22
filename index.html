@@ -35,9 +35,26 @@
       <input type="range" id="temp" min="0" max="1.5" step="0.05" value="0.8">
     </section>
 
-    <section class="group grow">
+    <section class="group">
       <label for="styleNotes">Style notes</label>
       <textarea id="styleNotes" placeholder="Optional standing instructions, e.g.&#10;&#8226; Literary fiction, close third person, past tense&#10;&#8226; Dry humor, short sentences&#10;&#8226; Never use the word 'suddenly'"></textarea>
+    </section>
+
+    <section class="group grow">
+      <label for="storyNotes">Story notes (always in context)</label>
+      <textarea id="storyNotes" placeholder="Characters, setting, plot so far &#8212; facts the model should always know, even when the draft outgrows the context window."></textarea>
+      <button id="btnSummarize" type="button" class="wide">&#10022; Summarize draft into notes</button>
+    </section>
+
+    <section class="group">
+      <label for="ctxSize">Draft context per request</label>
+      <select id="ctxSize">
+        <option value="8000">Small &#8212; last ~1,500 words</option>
+        <option value="24000">Medium &#8212; last ~4,500 words</option>
+        <option value="60000">Large &#8212; last ~11,000 words</option>
+        <option value="0">Entire draft</option>
+      </select>
+      <p class="hint" id="ctxMeter"></p>
     </section>
 
     <section class="group">

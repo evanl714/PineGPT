@@ -29,6 +29,13 @@ no dependencies.
   never touch your draft until you accept them. `Esc` dismisses.
 - **Style notes** — standing instructions (POV, tense, banned words, genre)
   sent with every request.
+- **Context management** — **Story notes** hold canon facts (characters,
+  setting, plot so far) that accompany every request; **Summarize draft into
+  notes** has the model compress your draft into a synopsis you review and
+  accept into those notes; a **context size** setting (small/medium/large/
+  entire draft) controls how much recent draft is sent; and a live **context
+  meter** shows exactly how much of the draft the model will see, warning
+  when earlier text has fallen out of the window.
 - **Model picker** — type any OpenRouter model id, or press ↻ to load the
   live model list and search it.
 - **Autosave** — the draft, key, and settings persist in `localStorage`.

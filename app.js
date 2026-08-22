@@ -2,16 +2,17 @@
 
 const API_URL = 'https://openrouter.ai/api/v1/chat/completions';
 const MODELS_URL = 'https://openrouter.ai/api/v1/models';
-const CONTEXT_BEFORE = 24000; // chars of draft sent before the cursor
-const CONTEXT_AFTER = 4000;   // chars of draft sent after the cursor
-const STORE = { key: 'cw_key', model: 'cw_model', temp: 'cw_temp', style: 'cw_style', doc: 'cw_doc' };
+const CONTEXT_AFTER = 4000;      // chars of draft sent after the cursor
+const SUMMARIZE_LIMIT = 120000;  // max chars of draft sent to the summarizer
+const STORE = { key: 'cw_key', model: 'cw_model', temp: 'cw_temp', style: 'cw_style', doc: 'cw_doc', story: 'cw_story', ctx: 'cw_ctx' };
 
 const $ = (s) => document.querySelector(s);
 const els = {
   key: $('#apiKey'), showKey: $('#showKey'),
   model: $('#model'), modelList: $('#modelList'), refreshModels: $('#refreshModels'), modelHint: $('#modelHint'),
   temp: $('#temp'), tempVal: $('#tempVal'),
-  style: $('#styleNotes'), editor: $('#editor'),
+  style: $('#styleNotes'), story: $('#storyNotes'), btnSummarize: $('#btnSummarize'),
+  ctxSize: $('#ctxSize'), ctxMeter: $('#ctxMeter'), editor: $('#editor'),
   wordCount: $('#wordCount'), saveState: $('#saveState'), download: $('#download'),
   btnContinue: $('#btnContinue'), btnImprove: $('#btnImprove'), btnShorten: $('#btnShorten'),
   btnExpand: $('#btnExpand'), customInstr: $('#customInstr'), btnCustom: $('#btnCustom'),
@@ -31,11 +32,14 @@ function loadState() {
   els.model.value = localStorage.getItem(STORE.model) || 'anthropic/claude-sonnet-4.5';
   els.temp.value = localStorage.getItem(STORE.temp) || '0.8';
   els.style.value = localStorage.getItem(STORE.style) || '';
+  els.story.value = localStorage.getItem(STORE.story) || '';
+  els.ctxSize.value = localStorage.getItem(STORE.ctx) || '24000';
   els.editor.value = localStorage.getItem(STORE.doc) || '';
   els.tempVal.textContent = els.temp.value;
   const end = els.editor.value.length;
   els.editor.setSelectionRange(end, end);
   updateWordCount();
+  updateCtxMeter();
 }
 
 let saveTimer = null;
@@ -52,6 +56,29 @@ function saveDoc() {
 function updateWordCount() {
   const words = (els.editor.value.match(/\S+/g) || []).length;
   els.wordCount.textContent = `${words} word${words === 1 ? '' : 's'}`;
+}
+
+function ctxLimit() {
+  return parseInt(els.ctxSize.value, 10) || Infinity; // 0 = entire draft
+}
+
+function countWords(text) {
+  return (text.match(/\S+/g) || []).length;
+}
+
+function updateCtxMeter() {
+  const doc = els.editor.value;
+  const limit = ctxLimit();
+  els.ctxMeter.classList.remove('warn');
+  if (!doc.trim()) {
+    els.ctxMeter.textContent = 'Nothing to send yet.';
+  } else if (doc.length <= limit) {
+    els.ctxMeter.textContent = `Entire draft (${countWords(doc)} words) goes with each request, plus notes.`;
+  } else {
+    const sent = countWords(doc.slice(doc.length - limit));
+    els.ctxMeter.textContent = `Sending the last ~${sent} of ${countWords(doc)} words. Earlier text is invisible to the model — use Summarize to keep Story notes current.`;
+    els.ctxMeter.classList.add('warn');
+  }
 }
 
 /* ---------- Model list ---------- */
@@ -80,6 +107,13 @@ async function fetchModels() {
 /* ---------- Prompt building ---------- */
 
 function systemPrompt(kind) {
+  if (kind === 'summarize') {
+    return 'You are an expert story editor building a working synopsis for the author\u2019s own reference. '
+      + 'From the draft you are given, produce compact notes covering: the characters and their key traits and '
+      + 'relationships; the setting; the plot events in order; and any open threads or unresolved questions. '
+      + 'Be specific about names and facts, stay under 300 words, and output only the notes \u2014 no preamble, '
+      + 'no commentary.';
+  }
   const base = kind === 'continue'
     ? 'You are an expert co-writer. Continue the draft seamlessly from exactly where it leaves off. '
       + 'Match the existing tone, voice, tense, point of view, and formatting. Never repeat or rephrase text '
@@ -90,8 +124,14 @@ function systemPrompt(kind) {
       + 'Preserve the meaning and any formatting (paragraph breaks, markdown) unless the instruction says otherwise, '
       + 'and match the tone of the surrounding draft. Output only the rewritten passage — no commentary, no quotation '
       + 'marks around it, no explanation of your changes.';
+  let out = base;
+  const story = els.story.value.trim();
+  if (story && kind !== 'summarize') {
+    out += `\n\nEstablished story/project notes — treat these as canon even if the draft excerpt does not mention them:\n${story}`;
+  }
   const style = els.style.value.trim();
-  return style ? `${base}\n\nStanding style notes from the author:\n${style}` : base;
+  if (style) out += `\n\nStanding style notes from the author:\n${style}`;
+  return out;
 }
 
 function continueUserMessage(before, after) {
@@ -169,8 +209,9 @@ async function streamCompletion(messages, onDelta) {
 /* ---------- Task orchestration ---------- */
 
 function setBusy(busy) {
-  for (const b of [els.btnContinue, els.btnImprove, els.btnShorten, els.btnExpand, els.btnCustom]) {
-    b.disabled = busy || (b !== els.btnContinue && !hasSelection());
+  for (const b of [els.btnContinue, els.btnImprove, els.btnShorten, els.btnExpand, els.btnCustom, els.btnSummarize]) {
+    const needsSelection = b !== els.btnContinue && b !== els.btnSummarize;
+    b.disabled = busy || (needsSelection && !hasSelection());
   }
 }
 
@@ -199,8 +240,15 @@ async function runTask(task) {
   const doc = els.editor.value;
   let messages;
 
-  if (task.kind === 'continue') {
-    const before = doc.slice(Math.max(0, task.cursor - CONTEXT_BEFORE), task.cursor);
+  if (task.kind === 'summarize') {
+    messages = [
+      { role: 'system', content: systemPrompt('summarize') },
+      { role: 'user', content: 'Here is the draft:\n\n<draft>\n' + doc.slice(0, SUMMARIZE_LIMIT) + '\n</draft>\n\nWrite the synopsis notes.' },
+    ];
+    openPanel('Synopsis — accept to add to Story notes');
+  } else if (task.kind === 'continue') {
+    const limit = ctxLimit();
+    const before = doc.slice(Math.max(0, task.cursor - Math.min(limit, task.cursor)), task.cursor);
     const after = doc.slice(task.cursor, task.cursor + CONTEXT_AFTER);
     if (!before.trim()) {
       // Nothing written yet — let the model open the piece instead of continuing it.
@@ -262,6 +310,16 @@ function acceptSuggestion() {
   if (!lastTask || !suggestion.trim()) return;
   const doc = els.editor.value;
 
+  if (lastTask.kind === 'summarize') {
+    const text = suggestion.trim();
+    const existing = els.story.value.trim();
+    els.story.value = existing ? existing + '\n\n' + text : text;
+    localStorage.setItem(STORE.story, els.story.value);
+    closePanel();
+    updateCtxMeter();
+    return;
+  }
+
   if (lastTask.kind === 'continue') {
     const before = doc.slice(0, lastTask.cursor);
     let text = suggestion.replace(/\s+$/, '');
@@ -313,8 +371,18 @@ els.temp.addEventListener('input', () => {
   localStorage.setItem(STORE.temp, els.temp.value);
 });
 els.style.addEventListener('input', () => localStorage.setItem(STORE.style, els.style.value));
+els.story.addEventListener('input', () => localStorage.setItem(STORE.story, els.story.value));
+els.ctxSize.addEventListener('change', () => {
+  localStorage.setItem(STORE.ctx, els.ctxSize.value);
+  updateCtxMeter();
+});
+els.btnSummarize.addEventListener('click', () => {
+  if (controller) return;
+  if (!els.editor.value.trim()) return;
+  runTask({ kind: 'summarize' });
+});
 
-els.editor.addEventListener('input', () => { saveDoc(); updateWordCount(); });
+els.editor.addEventListener('input', () => { saveDoc(); updateWordCount(); updateCtxMeter(); });
 document.addEventListener('selectionchange', () => {
   if (controller) return;
   // A textarea keeps its selection while blurred, so no focus check —
