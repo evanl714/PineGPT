@@ -212,6 +212,12 @@ button.wide { width: 100%; }
   font: 16px/1.6 Georgia, "Iowan Old Style", serif;
 }
 .panel-body.error { color: var(--danger); font-family: inherit; font-size: 14px; }
+.panel-body[contenteditable] { cursor: text; caret-color: var(--accent); }
+.panel-body[contenteditable]:focus {
+  outline: none;
+  box-shadow: inset 0 0 0 2px var(--accent);
+  border-radius: 6px;
+}
 .panel-actions {
   display: flex;
   gap: 8px;

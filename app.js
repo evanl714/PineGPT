@@ -27,7 +27,7 @@ const els = {
   ghToken: $('#ghToken'), showGh: $('#showGh'), syncSave: $('#syncSave'), syncLoad: $('#syncLoad'), syncStatus: $('#syncStatus'),
   btnContinue: $('#btnContinue'), btnImprove: $('#btnImprove'), btnShorten: $('#btnShorten'),
   btnExpand: $('#btnExpand'), customInstr: $('#customInstr'), btnCustom: $('#btnCustom'),
-  panel: $('#panel'), panelTitle: $('#panelTitle'), panelBody: $('#panelBody'),
+  panel: $('#panel'), panelTitle: $('#panelTitle'), panelBody: $('#panelBody'), panelEditHint: $('#panelEditHint'),
   panelActions: $('#panelActions'), btnAccept: $('#btnAccept'), btnRetry: $('#btnRetry'),
   btnDiscard: $('#btnDiscard'), btnStop: $('#btnStop'),
 };
@@ -503,6 +503,8 @@ function hasSelection() {
 function openPanel(title) {
   els.panelTitle.textContent = title;
   els.panelBody.textContent = '';
+  els.panelBody.contentEditable = 'false';
+  els.panelEditHint.hidden = true;
   els.panelBody.classList.remove('error');
   els.panelBody.classList.add('cursor-blink');
   els.panelActions.hidden = true;
@@ -620,11 +622,20 @@ function finishStream() {
   els.panelBody.classList.remove('cursor-blink');
   els.btnStop.hidden = true;
   els.panelActions.hidden = false;
-  els.btnAccept.hidden = !suggestion.trim();
+  const hasText = !!suggestion.trim();
+  els.btnAccept.hidden = !hasText;
+  if (hasText) {
+    // The finished suggestion is editable in place; Accept applies what's in the panel.
+    try { els.panelBody.contentEditable = 'plaintext-only'; } catch { els.panelBody.contentEditable = 'true'; }
+    els.panelEditHint.hidden = false;
+  }
 }
 
 function acceptSuggestion() {
   if (!lastTask || !suggestion.trim()) return;
+  // Any in-panel edits win over the raw stream (innerText keeps the line breaks).
+  if (els.panelBody.isContentEditable) suggestion = els.panelBody.innerText;
+  if (!suggestion.trim()) return;
   const doc = els.editor.value;
 
   if (lastTask.kind === 'lore-scan') {
