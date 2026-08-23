@@ -16,6 +16,7 @@ const els = {
   sysOverride: $('#sysOverride'), matureOk: $('#matureOk'),
   loreScan: $('#loreScan'), loreFill: $('#loreFill'), loreInvent: $('#loreInvent'),
   ctxSize: $('#ctxSize'), ctxMeter: $('#ctxMeter'), editor: $('#editor'), direction: $('#direction'),
+  menuBtn: $('#menuBtn'), scrim: $('#scrim'), sidebarClose: $('#sidebarClose'),
   btnLore: $('#btnLore'), loreCount: $('#loreCount'), loreHint: $('#loreHint'),
   loreModal: $('#loreModal'), loreAdd: $('#loreAdd'), loreClose: $('#loreClose'),
   loreList: $('#loreList'), loreEditor: $('#loreEditor'), loreEmpty: $('#loreEmpty'),
@@ -966,6 +967,10 @@ document.addEventListener('selectionchange', () => {
   for (const b of [els.btnImprove, els.btnShorten, els.btnExpand, els.btnCustom]) b.disabled = !enabled;
 });
 
+els.menuBtn.addEventListener('click', () => document.body.classList.toggle('sidebar-open'));
+els.scrim.addEventListener('click', () => document.body.classList.remove('sidebar-open'));
+els.sidebarClose.addEventListener('click', () => document.body.classList.remove('sidebar-open'));
+
 els.btnContinue.addEventListener('click', startContinue);
 els.direction.addEventListener('input', () => { localStorage.setItem(STORE.dir, els.direction.value); updateDirRef(); });
 els.direction.addEventListener('keydown', (e) => {
@@ -1033,6 +1038,8 @@ document.addEventListener('keydown', (e) => {
   if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
     e.preventDefault();
     startContinue();
+  } else if (e.key === 'Escape' && document.body.classList.contains('sidebar-open')) {
+    document.body.classList.remove('sidebar-open');
   } else if (e.key === 'Escape' && !els.loreModal.hidden) {
     els.loreModal.hidden = true;
     updateLoreUI();

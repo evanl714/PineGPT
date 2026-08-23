@@ -8,6 +8,7 @@
 </head>
 <body>
   <aside class="sidebar">
+    <button id="sidebarClose" class="sidebar-close" type="button" title="Close settings">&#10005;</button>
     <h1 class="logo">CoWriter</h1>
     <p class="tagline">AI cowriting via OpenRouter</p>
 
@@ -106,8 +107,11 @@
     </section>
   </aside>
 
+  <div id="scrim" class="scrim"></div>
+
   <main class="main">
     <div class="toolbar">
+      <button id="menuBtn" class="menu-btn" type="button" title="Settings">&#9776;</button>
       <button id="btnContinue" type="button" class="primary" title="Continue writing from the cursor (Ctrl+Enter)">&#9998; Continue</button>
       <select id="genLen" title="How much Continue writes">
         <option value="sentence">1 sentence</option>

@@ -50,6 +50,9 @@ body {
   overflow-y: auto;
 }
 .logo { margin: 0; font-size: 20px; letter-spacing: 0.02em; }
+.menu-btn { display: none; }
+.scrim { display: none; }
+.sidebar-close { display: none; }
 .tagline { margin: -14px 0 0; color: var(--muted); font-size: 12px; }
 .group { display: flex; flex-direction: column; gap: 6px; }
 .group.grow { flex: 1 1 auto; min-height: 120px; }
@@ -218,10 +221,49 @@ button.wide { width: 100%; }
 .cursor-blink::after { content: "\258B"; animation: blink 1s steps(1) infinite; color: var(--accent); }
 @keyframes blink { 50% { opacity: 0; } }
 
+/* ---------- Mobile: sidebar becomes an off-canvas drawer ---------- */
 @media (max-width: 760px) {
-  body { flex-direction: column; }
-  .sidebar { width: 100%; border-right: none; border-bottom: 1px solid var(--border); }
-  .group.grow { min-height: 80px; }
+  .sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    width: min(85vw, 340px);
+    transform: translateX(-103%);
+    transition: transform 0.2s ease;
+    z-index: 30;
+    box-shadow: 4px 0 24px rgba(0, 0, 0, 0.3);
+  }
+  body.sidebar-open .sidebar { transform: none; }
+  body.sidebar-open .scrim {
+    display: block;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.45);
+    z-index: 25;
+  }
+  .sidebar-close {
+    display: flex;
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    padding: 4px 10px;
+  }
+  .menu-btn { display: inline-block; }
+  .group.grow { min-height: 100px; }
+
+  /* One scrollable toolbar row instead of a four-row wrap */
+  .toolbar {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .toolbar-label { display: none; }
+  .toolbar .divider { flex: none; }
+  #customInstr { flex: 0 0 180px; width: 180px; }
+  .editor-wrap { padding: 16px 12px 130px; }
+  #editor { font-size: 17px; }
+  .direction-bar { padding: 8px 12px; }
 }
 
 /* ---------- Lorebook modal ---------- */
