@@ -77,6 +77,11 @@ no dependencies.
   live model list and search it.
 - **Autosave** — the draft, key, and settings persist in `localStorage`.
   Download the draft as Markdown anytime.
+- **Move between devices** — **Export/Import project** bundles the draft,
+  notes, lorebook, and settings into one .json file; **GitHub Gist sync**
+  saves that bundle to a private gist so you can ↑ Save on one device and
+  ↓ Load on another (paste a token with the gist scope once per device).
+  The OpenRouter API key never leaves the device either way.
 
 ## Privacy
 

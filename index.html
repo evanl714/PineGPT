@@ -80,7 +80,29 @@
 
     <section class="group">
       <button id="download" type="button" class="wide">Download draft (.md)</button>
-      <p class="hint">Draft autosaves to this browser. <kbd>Ctrl</kbd>+<kbd>Enter</kbd> continues, <kbd>Esc</kbd> dismisses a suggestion.</p>
+      <div class="row2">
+        <button id="exportProj" type="button">Export project</button>
+        <button id="importProj" type="button">Import&#8230;</button>
+      </div>
+      <input type="file" id="importFile" accept=".json,application/json" hidden>
+      <p class="hint">Export bundles draft, notes, lorebook, and settings into one .json for backup or moving devices.</p>
+    </section>
+
+    <section class="group">
+      <label for="ghToken">Sync via GitHub Gist</label>
+      <div class="keyrow">
+        <input type="password" id="ghToken" placeholder="GitHub token with gist scope" autocomplete="off" spellcheck="false">
+        <button id="showGh" type="button" title="Show/hide token">&#128065;</button>
+      </div>
+      <div class="row2">
+        <button id="syncSave" type="button">&#8593; Save</button>
+        <button id="syncLoad" type="button">&#8595; Load</button>
+      </div>
+      <p class="hint" id="syncStatus">Same project on every device: Save here, Load on the other one. Uses a private gist; your OpenRouter key never syncs. Token: github.com/settings/tokens &#8594; classic token, &#8220;gist&#8221; scope.</p>
+    </section>
+
+    <section class="group">
+      <p class="hint"><kbd>Ctrl</kbd>+<kbd>Enter</kbd> continues, <kbd>Esc</kbd> dismisses a suggestion. Draft autosaves to this browser.</p>
     </section>
   </aside>
 

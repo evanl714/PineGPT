@@ -4,7 +4,7 @@ const API_URL = 'https://openrouter.ai/api/v1/chat/completions';
 const MODELS_URL = 'https://openrouter.ai/api/v1/models';
 const CONTEXT_AFTER = 4000;      // chars of draft sent after the cursor
 const SUMMARIZE_LIMIT = 120000;  // max chars of draft sent to the summarizer
-const STORE = { key: 'cw_key', model: 'cw_model', temp: 'cw_temp', style: 'cw_style', doc: 'cw_doc', story: 'cw_story', ctx: 'cw_ctx', lore: 'cw_lore', dir: 'cw_dir', sys: 'cw_sys', mature: 'cw_mature', len: 'cw_len', dlg: 'cw_dlg' };
+const STORE = { key: 'cw_key', model: 'cw_model', temp: 'cw_temp', style: 'cw_style', doc: 'cw_doc', story: 'cw_story', ctx: 'cw_ctx', lore: 'cw_lore', dir: 'cw_dir', sys: 'cw_sys', mature: 'cw_mature', len: 'cw_len', dlg: 'cw_dlg', gh: 'cw_gh', gist: 'cw_gist' };
 
 const $ = (s) => document.querySelector(s);
 const els = {
@@ -22,6 +22,8 @@ const els = {
   loreName: $('#loreName'), loreTags: $('#loreTags'), loreContent: $('#loreContent'),
   loreDelete: $('#loreDelete'),
   wordCount: $('#wordCount'), saveState: $('#saveState'), download: $('#download'),
+  exportProj: $('#exportProj'), importProj: $('#importProj'), importFile: $('#importFile'),
+  ghToken: $('#ghToken'), showGh: $('#showGh'), syncSave: $('#syncSave'), syncLoad: $('#syncLoad'), syncStatus: $('#syncStatus'),
   btnContinue: $('#btnContinue'), btnImprove: $('#btnImprove'), btnShorten: $('#btnShorten'),
   btnExpand: $('#btnExpand'), customInstr: $('#customInstr'), btnCustom: $('#btnCustom'),
   panel: $('#panel'), panelTitle: $('#panelTitle'), panelBody: $('#panelBody'),
@@ -47,6 +49,7 @@ function loadState() {
   els.matureOk.checked = localStorage.getItem(STORE.mature) === '1';
   els.genLen.value = localStorage.getItem(STORE.len) || 'couple';
   els.dlgFmt.checked = localStorage.getItem(STORE.dlg) !== '0';
+  els.ghToken.value = localStorage.getItem(STORE.gh) || '';
   els.editor.value = localStorage.getItem(STORE.doc) || '';
   els.tempVal.textContent = els.temp.value;
   const end = els.editor.value.length;
@@ -713,6 +716,161 @@ function startRewrite(instruction) {
   });
 }
 
+/* ---------- Project bundle (export / import / gist sync) ---------- */
+
+const GIST_DESC = 'CoWriter sync';
+const GIST_FILE = 'cowriter-project.json';
+
+// Everything that defines the project — deliberately NOT the OpenRouter key.
+function projectData() {
+  return {
+    version: 1,
+    savedAt: new Date().toISOString(),
+    draft: els.editor.value,
+    story: els.story.value,
+    style: els.style.value,
+    sys: els.sysOverride.value,
+    direction: els.direction.value,
+    lore,
+    settings: {
+      model: els.model.value,
+      temp: els.temp.value,
+      ctx: els.ctxSize.value,
+      len: els.genLen.value,
+      dlg: els.dlgFmt.checked,
+      mature: els.matureOk.checked,
+    },
+  };
+}
+
+function applyProject(d) {
+  els.editor.value = d.draft ?? '';
+  els.story.value = d.story ?? '';
+  els.style.value = d.style ?? '';
+  els.sysOverride.value = d.sys ?? '';
+  els.direction.value = d.direction ?? '';
+  lore = Array.isArray(d.lore) ? d.lore : [];
+  const st = d.settings || {};
+  if (st.model) els.model.value = st.model;
+  if (st.temp) { els.temp.value = st.temp; els.tempVal.textContent = st.temp; }
+  if (st.ctx) els.ctxSize.value = st.ctx;
+  if (st.len) els.genLen.value = st.len;
+  els.dlgFmt.checked = st.dlg !== false;
+  els.matureOk.checked = !!st.mature;
+  localStorage.setItem(STORE.doc, els.editor.value);
+  localStorage.setItem(STORE.story, els.story.value);
+  localStorage.setItem(STORE.style, els.style.value);
+  localStorage.setItem(STORE.sys, els.sysOverride.value);
+  localStorage.setItem(STORE.dir, els.direction.value);
+  localStorage.setItem(STORE.model, els.model.value);
+  localStorage.setItem(STORE.temp, els.temp.value);
+  localStorage.setItem(STORE.ctx, els.ctxSize.value);
+  localStorage.setItem(STORE.len, els.genLen.value);
+  localStorage.setItem(STORE.dlg, els.dlgFmt.checked ? '1' : '0');
+  localStorage.setItem(STORE.mature, els.matureOk.checked ? '1' : '');
+  saveLore();
+  loreEditingId = null;
+  els.loreEditor.hidden = true;
+  updateWordCount();
+  updateCtxMeter();
+  renderLoreList();
+  updateLoreUI();
+  updateDirRef();
+}
+
+function confirmOverwrite(d) {
+  if (!els.editor.value.trim()) return true;
+  const words = countWords(d.draft || '');
+  const when = d.savedAt ? new Date(d.savedAt).toLocaleString() : 'unknown time';
+  return confirm(`Replace the project on THIS device with the loaded one? (${words} words, saved ${when}.) The current draft here will be overwritten.`);
+}
+
+async function gistRequest(path, opts = {}) {
+  const token = els.ghToken.value.trim();
+  if (!token) throw new Error('Add a GitHub token (gist scope) first.');
+  const res = await fetch('https://api.github.com' + path, {
+    ...opts,
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Accept': 'application/vnd.github+json',
+      ...(opts.body ? { 'Content-Type': 'application/json' } : {}),
+    },
+  });
+  if (!res.ok) {
+    let msg = `GitHub returned ${res.status}`;
+    try { msg += `: ${(await res.json()).message}`; } catch { /* ignore */ }
+    if (res.status === 401) msg += ' — check the token.';
+    if (res.status === 404) msg += ' — token may be missing the gist scope.';
+    throw new Error(msg);
+  }
+  return res.status === 204 ? null : res.json();
+}
+
+async function findGistId() {
+  const known = localStorage.getItem(STORE.gist);
+  if (known) {
+    try {
+      await gistRequest(`/gists/${known}`);
+      return known;
+    } catch { localStorage.setItem(STORE.gist, ''); }
+  }
+  const list = await gistRequest('/gists?per_page=100');
+  const hit = list.find((g) => g.description === GIST_DESC && g.files && g.files[GIST_FILE]);
+  if (hit) localStorage.setItem(STORE.gist, hit.id);
+  return hit ? hit.id : null;
+}
+
+function setSyncBusy(busy) {
+  els.syncSave.disabled = busy;
+  els.syncLoad.disabled = busy;
+}
+
+async function syncSave() {
+  setSyncBusy(true);
+  els.syncStatus.textContent = 'Saving to GitHub…';
+  try {
+    const body = JSON.stringify({
+      description: GIST_DESC,
+      public: false,
+      files: { [GIST_FILE]: { content: JSON.stringify(projectData(), null, 1) } },
+    });
+    const id = await findGistId();
+    const gist = id
+      ? await gistRequest(`/gists/${id}`, { method: 'PATCH', body })
+      : await gistRequest('/gists', { method: 'POST', body });
+    localStorage.setItem(STORE.gist, gist.id);
+    els.syncStatus.textContent = `Saved ${new Date(gist.updated_at).toLocaleString()}. Load this on your other device.`;
+  } catch (err) {
+    els.syncStatus.textContent = err.message;
+  } finally {
+    setSyncBusy(false);
+  }
+}
+
+async function syncLoad() {
+  setSyncBusy(true);
+  els.syncStatus.textContent = 'Loading from GitHub…';
+  try {
+    const id = await findGistId();
+    if (!id) throw new Error('No synced project found on this GitHub account yet — Save from the other device first.');
+    const gist = await gistRequest(`/gists/${id}`);
+    const f = gist.files[GIST_FILE];
+    const content = f.truncated ? await (await fetch(f.raw_url)).text() : f.content;
+    const d = JSON.parse(content);
+    if (typeof d.draft !== 'string') throw new Error('The synced file is not a CoWriter project.');
+    if (!confirmOverwrite(d)) {
+      els.syncStatus.textContent = 'Load cancelled.';
+      return;
+    }
+    applyProject(d);
+    els.syncStatus.textContent = `Loaded (saved ${d.savedAt ? new Date(d.savedAt).toLocaleString() : 'unknown time'}).`;
+  } catch (err) {
+    els.syncStatus.textContent = err.message;
+  } finally {
+    setSyncBusy(false);
+  }
+}
+
 /* ---------- Wiring ---------- */
 
 loadState();
@@ -832,6 +990,34 @@ els.btnDiscard.addEventListener('click', () => {
     els.editor.focus();
   }
 });
+
+els.exportProj.addEventListener('click', () => {
+  const blob = new Blob([JSON.stringify(projectData(), null, 1)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'cowriter-project.json';
+  a.click();
+  URL.revokeObjectURL(a.href);
+});
+els.importProj.addEventListener('click', () => els.importFile.click());
+els.importFile.addEventListener('change', async () => {
+  const file = els.importFile.files[0];
+  els.importFile.value = '';
+  if (!file) return;
+  try {
+    const d = JSON.parse(await file.text());
+    if (typeof d.draft !== 'string') throw new Error('bad file');
+    if (confirmOverwrite(d)) applyProject(d);
+  } catch {
+    alert('That file is not a CoWriter project export.');
+  }
+});
+els.ghToken.addEventListener('input', () => localStorage.setItem(STORE.gh, els.ghToken.value.trim()));
+els.showGh.addEventListener('click', () => {
+  els.ghToken.type = els.ghToken.type === 'password' ? 'text' : 'password';
+});
+els.syncSave.addEventListener('click', syncSave);
+els.syncLoad.addEventListener('click', syncLoad);
 
 els.download.addEventListener('click', () => {
   const blob = new Blob([els.editor.value], { type: 'text/markdown' });
