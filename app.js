@@ -17,6 +17,7 @@ const els = {
   loreScan: $('#loreScan'), loreFill: $('#loreFill'), loreInvent: $('#loreInvent'),
   ctxSize: $('#ctxSize'), ctxMeter: $('#ctxMeter'), editor: $('#editor'), direction: $('#direction'),
   menuBtn: $('#menuBtn'), scrim: $('#scrim'), sidebarClose: $('#sidebarClose'),
+  selInfo: $('#selInfo'),
   btnLore: $('#btnLore'), loreCount: $('#loreCount'), loreHint: $('#loreHint'),
   loreModal: $('#loreModal'), loreAdd: $('#loreAdd'), loreClose: $('#loreClose'),
   loreList: $('#loreList'), loreEditor: $('#loreEditor'), loreEmpty: $('#loreEmpty'),
@@ -37,16 +38,29 @@ const els = {
 // tap), so every feature reads this record instead of the live selection.
 const sel = { start: 0, end: 0 };
 
+let selInfoText = '';
+function updateSelInfo() {
+  const text = sel.start !== sel.end
+    ? `${sel.end - sel.start} ch selected (${sel.start}\u2013${sel.end})`
+    : `caret ${sel.end}`;
+  if (text !== selInfoText) {
+    selInfoText = text;
+    els.selInfo.textContent = text;
+  }
+}
+
 function recordSelection() {
   if (document.activeElement !== els.editor) return;
   sel.start = els.editor.selectionStart;
   sel.end = els.editor.selectionEnd;
+  updateSelInfo();
 }
 
 function setSel(start, end) {
   sel.start = start;
   sel.end = end;
   els.editor.setSelectionRange(start, end);
+  updateSelInfo();
 }
 
 let controller = null;   // AbortController for the in-flight request
@@ -597,7 +611,7 @@ async function runTask(task) {
         { role: 'user', content: continueUserMessage(before, after, direction, resolved, location) },
       ];
     }
-    openPanel('Continuation');
+    openPanel(`Continuation \u2014 from char ${task.cursor}`);
   } else {
     const passage = doc.slice(task.selStart, task.selEnd);
     const before = doc.slice(Math.max(0, task.selStart - 2000), task.selStart);

@@ -4,13 +4,13 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>CoWriter</title>
-  <link rel="stylesheet" href="style.css?v=13">
+  <link rel="stylesheet" href="style.css?v=14">
 </head>
 <body>
   <aside class="sidebar">
     <button id="sidebarClose" class="sidebar-close" type="button" title="Close settings">&#10005;</button>
     <h1 class="logo">CoWriter</h1>
-    <p class="tagline">AI cowriting via OpenRouter &#183; <span id="version">v13</span></p>
+    <p class="tagline">AI cowriting via OpenRouter &#183; <span id="version">v14</span></p>
 
     <section class="group">
       <label for="apiKey">OpenRouter API key</label>
@@ -140,6 +140,7 @@
       <label class="toolbar-label" for="direction">Next:</label>
       <input type="text" id="direction" placeholder="Steer the next continuation &#8212; e.g. 'Marla finally leaves the house', or reference 'chapter 2, scene 3'. Cleared when a continuation is accepted.">
       <span id="dirRef" class="meta"></span>
+      <span id="selInfo" class="meta"></span>
     </div>
 
     <div class="editor-wrap">
@@ -194,6 +195,6 @@
     </div>
   </div>
 
-  <script src="app.js?v=13"></script>
+  <script src="app.js?v=14"></script>
 </body>
 </html>
