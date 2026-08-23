@@ -229,6 +229,9 @@ button.wide { width: 100%; }
 
 /* ---------- Mobile: sidebar becomes an off-canvas drawer ---------- */
 @media (max-width: 760px) {
+  /* iOS auto-zooms the page when focusing any field under 16px */
+  input[type="text"], input[type="password"], textarea, select { font-size: 16px; }
+
   .sidebar {
     position: fixed;
     top: 0;
