@@ -800,6 +800,7 @@ async function gistRequest(path, opts = {}) {
     let msg = `GitHub returned ${res.status}`;
     try { msg += `: ${(await res.json()).message}`; } catch { /* ignore */ }
     if (res.status === 401) msg += ' — check the token.';
+    if (res.status === 403) msg += ' — fine-grained tokens cannot use gists; create a CLASSIC token with the gist scope at github.com/settings/tokens/new.';
     if (res.status === 404) msg += ' — token may be missing the gist scope.';
     throw new Error(msg);
   }
