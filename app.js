@@ -321,7 +321,17 @@ const LENGTHS = {
 };
 
 function lengthClause() {
-  return '\n\nLength: ' + (LENGTHS[els.genLen.value] || LENGTHS.couple);
+  return '\n\nLength: ' + (LENGTHS[els.genLen.value] || LENGTHS.couple)
+    + ' Treat this as a hard ceiling, not a target — when in doubt, stop sooner. Ending early is always acceptable; running long never is.';
+}
+
+function craftClause() {
+  return '\n\nProse quality: Be economical — every sentence must earn its place by advancing action, revealing '
+    + 'character, or sharpening an image. Cut filler, throat-clearing, and restatement; prefer concrete nouns '
+    + 'and strong verbs over abstraction and adverbs; vary sentence rhythm. Never reuse distinctive phrases, '
+    + 'metaphors, or sentence shapes that already appear in the provided draft — bring something new. '
+    + 'If the recent draft runs loose or overwritten, do not match or amplify that: write tighter than the '
+    + 'text around you. Do not stall in interiority, scenery, or summary of feelings already shown.';
 }
 
 function formattingClause() {
@@ -382,6 +392,7 @@ function systemPrompt(kind, loreText) {
   let out = base + matureClause();
   if (kind === 'continue') out += lengthClause(); // applies over an override too
   out += formattingClause();
+  out += craftClause();
   if (loreText) out += '\n\n' + loreText;
   const story = els.story.value.trim();
   if (story && kind !== 'summarize') {
