@@ -1002,6 +1002,10 @@ els.editor.addEventListener('input', () => { saveDoc(); updateWordCount(); updat
 for (const ev of ['input', 'click', 'keyup', 'focus', 'touchend', 'select']) {
   els.editor.addEventListener(ev, recordSelection);
 }
+// iOS Safari updates a tapped-in caret AFTER touchend, and selectionchange is
+// unreliable for textareas there — events alone always read one caret-move
+// behind. Poll while the editor is focused; recordSelection no-ops otherwise.
+setInterval(recordSelection, 150);
 document.addEventListener('selectionchange', () => {
   recordSelection();
   if (controller) return;
