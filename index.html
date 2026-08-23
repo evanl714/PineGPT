@@ -4,13 +4,13 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>CoWriter</title>
-  <link rel="stylesheet" href="style.css?v=14">
+  <link rel="stylesheet" href="style.css?v=15">
 </head>
 <body>
   <aside class="sidebar">
     <button id="sidebarClose" class="sidebar-close" type="button" title="Close settings">&#10005;</button>
     <h1 class="logo">CoWriter</h1>
-    <p class="tagline">AI cowriting via OpenRouter &#183; <span id="version">v14</span></p>
+    <p class="tagline">AI cowriting via OpenRouter &#183; <span id="version">v15</span></p>
 
     <section class="group">
       <label for="apiKey">OpenRouter API key</label>
@@ -39,6 +39,11 @@
     <section class="group">
       <label for="styleNotes">Style notes</label>
       <textarea id="styleNotes" placeholder="Optional standing instructions, e.g.&#10;&#8226; Literary fiction, close third person, past tense&#10;&#8226; Dry humor, short sentences&#10;&#8226; Never use the word 'suddenly'"></textarea>
+    </section>
+
+    <section class="group">
+      <label class="checkline"><input type="checkbox" id="bridgeOk" checked> Continue reads text after the cursor</label>
+      <p class="hint">When continuing mid-draft, up to ~4,000 characters after the caret are sent so the new text can bridge into what follows. Turn off to generate from the text before the caret only.</p>
     </section>
 
     <section class="group">
@@ -195,6 +200,6 @@
     </div>
   </div>
 
-  <script src="app.js?v=14"></script>
+  <script src="app.js?v=15"></script>
 </body>
 </html>

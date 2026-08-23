@@ -4,14 +4,14 @@ const API_URL = 'https://openrouter.ai/api/v1/chat/completions';
 const MODELS_URL = 'https://openrouter.ai/api/v1/models';
 const CONTEXT_AFTER = 4000;      // chars of draft sent after the cursor
 const SUMMARIZE_LIMIT = 120000;  // max chars of draft sent to the summarizer
-const STORE = { key: 'cw_key', model: 'cw_model', temp: 'cw_temp', style: 'cw_style', doc: 'cw_doc', story: 'cw_story', ctx: 'cw_ctx', lore: 'cw_lore', dir: 'cw_dir', sys: 'cw_sys', mature: 'cw_mature', len: 'cw_len', dlg: 'cw_dlg', gh: 'cw_gh', gist: 'cw_gist' };
+const STORE = { key: 'cw_key', model: 'cw_model', temp: 'cw_temp', style: 'cw_style', doc: 'cw_doc', story: 'cw_story', ctx: 'cw_ctx', lore: 'cw_lore', dir: 'cw_dir', sys: 'cw_sys', mature: 'cw_mature', len: 'cw_len', dlg: 'cw_dlg', bridge: 'cw_bridge', gh: 'cw_gh', gist: 'cw_gist' };
 
 const $ = (s) => document.querySelector(s);
 const els = {
   key: $('#apiKey'), showKey: $('#showKey'),
   model: $('#model'), modelList: $('#modelList'), refreshModels: $('#refreshModels'), modelHint: $('#modelHint'),
   temp: $('#temp'), tempVal: $('#tempVal'), genLen: $('#genLen'),
-  dlgFmt: $('#dlgFmt'), btnSceneBreak: $('#btnSceneBreak'), btnChapterBreak: $('#btnChapterBreak'), dirRef: $('#dirRef'),
+  dlgFmt: $('#dlgFmt'), bridgeOk: $('#bridgeOk'), btnSceneBreak: $('#btnSceneBreak'), btnChapterBreak: $('#btnChapterBreak'), dirRef: $('#dirRef'),
   style: $('#styleNotes'), story: $('#storyNotes'), btnSummarize: $('#btnSummarize'),
   sysOverride: $('#sysOverride'), matureOk: $('#matureOk'),
   loreScan: $('#loreScan'), loreFill: $('#loreFill'), loreInvent: $('#loreInvent'),
@@ -81,6 +81,7 @@ function loadState() {
   els.matureOk.checked = localStorage.getItem(STORE.mature) === '1';
   els.genLen.value = localStorage.getItem(STORE.len) || 'couple';
   els.dlgFmt.checked = localStorage.getItem(STORE.dlg) !== '0';
+  els.bridgeOk.checked = localStorage.getItem(STORE.bridge) !== '0';
   els.ghToken.value = localStorage.getItem(STORE.gh) || '';
   els.editor.value = localStorage.getItem(STORE.doc) || '';
   els.tempVal.textContent = els.temp.value;
@@ -444,8 +445,9 @@ function continueUserMessage(before, after, direction, resolved, location) {
   let msg = 'Here is my draft, up to the point where I need you to continue:\n\n'
     + '<draft>\n' + before + '\n</draft>\n\n';
   if (after.trim()) {
-    msg += 'The draft resumes AFTER the insertion point with the following text, so your continuation must '
-      + 'bridge into it naturally without repeating it:\n\n<later_text>\n' + after + '\n</later_text>\n\n';
+    msg += 'The draft resumes AFTER the insertion point with the following text. Treat it only as a constraint: '
+      + 'do not contradict it, do not repeat it, and do not pull its events, images, or phrasing forward. '
+      + 'Write only what happens next at the insertion point itself:\n\n<later_text>\n' + after + '\n</later_text>\n\n';
   }
   if (resolved?.found) {
     msg += 'The author\u2019s direction refers to this passage from earlier in the manuscript (' + resolved.label + '):\n\n<referenced>\n'
@@ -591,7 +593,7 @@ async function runTask(task) {
   } else if (task.kind === 'continue') {
     const limit = ctxLimit();
     const before = doc.slice(Math.max(0, task.cursor - Math.min(limit, task.cursor)), task.cursor);
-    const after = doc.slice(task.cursor, task.cursor + CONTEXT_AFTER);
+    const after = els.bridgeOk.checked ? doc.slice(task.cursor, task.cursor + CONTEXT_AFTER) : '';
     const direction = els.direction.value.trim();
     const resolved = direction ? resolveDirectionRef(doc, direction, task.cursor) : null;
     const location = locateCursor(doc, task.cursor);
@@ -939,6 +941,7 @@ els.model.addEventListener('input', () => localStorage.setItem(STORE.model, els.
 els.refreshModels.addEventListener('click', fetchModels);
 els.genLen.addEventListener('change', () => localStorage.setItem(STORE.len, els.genLen.value));
 els.dlgFmt.addEventListener('change', () => localStorage.setItem(STORE.dlg, els.dlgFmt.checked ? '1' : '0'));
+els.bridgeOk.addEventListener('change', () => localStorage.setItem(STORE.bridge, els.bridgeOk.checked ? '1' : '0'));
 els.btnSceneBreak.addEventListener('click', () => insertAtCursor('***\n\n'));
 els.btnChapterBreak.addEventListener('click', () => {
   const nums = [...els.editor.value.matchAll(/^[ \t]*chapter\s+(\d+)\b/gim)].map((m) => parseInt(m[1], 10));
