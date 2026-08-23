@@ -32,6 +32,23 @@ const els = {
   btnDiscard: $('#btnDiscard'), btnStop: $('#btnStop'),
 };
 
+// Last caret/selection observed while the editor was focused. iOS Safari
+// resets the real selection to 0 when the textarea blurs (e.g. on any button
+// tap), so every feature reads this record instead of the live selection.
+const sel = { start: 0, end: 0 };
+
+function recordSelection() {
+  if (document.activeElement !== els.editor) return;
+  sel.start = els.editor.selectionStart;
+  sel.end = els.editor.selectionEnd;
+}
+
+function setSel(start, end) {
+  sel.start = start;
+  sel.end = end;
+  els.editor.setSelectionRange(start, end);
+}
+
 let controller = null;   // AbortController for the in-flight request
 let lastTask = null;     // { kind, instruction, selStart, selEnd, cursor } for Retry/Accept
 let suggestion = '';     // accumulated streamed text
@@ -54,7 +71,7 @@ function loadState() {
   els.editor.value = localStorage.getItem(STORE.doc) || '';
   els.tempVal.textContent = els.temp.value;
   const end = els.editor.value.length;
-  els.editor.setSelectionRange(end, end);
+  setSel(end, end);
   updateWordCount();
   updateCtxMeter();
   renderLoreList();
@@ -185,7 +202,7 @@ function resolveDirectionRef(doc, direction, cursor) {
 
 function updateDirRef() {
   const direction = els.direction.value.trim();
-  const resolved = direction ? resolveDirectionRef(els.editor.value, direction, els.editor.selectionEnd) : null;
+  const resolved = direction ? resolveDirectionRef(els.editor.value, direction, sel.end) : null;
   els.dirRef.classList.remove('warn');
   if (!resolved) {
     els.dirRef.textContent = '';
@@ -497,7 +514,7 @@ function setBusy(busy) {
 }
 
 function hasSelection() {
-  return els.editor.selectionStart !== els.editor.selectionEnd;
+  return sel.start !== sel.end;
 }
 
 function openPanel(title) {
@@ -691,13 +708,13 @@ function acceptSuggestion() {
     if (before && !/\s$/.test(before) && !/^[\s.,;:!?)\]'"”’—-]/.test(text)) text = ' ' + text;
     els.editor.value = before + text + doc.slice(lastTask.cursor);
     const pos = (before + text).length;
-    els.editor.setSelectionRange(pos, pos);
+    setSel(pos, pos);
     els.direction.value = '';
     localStorage.setItem(STORE.dir, '');
   } else {
     const text = suggestion.replace(/\s+$/, '');
     els.editor.value = doc.slice(0, lastTask.selStart) + text + doc.slice(lastTask.selEnd);
-    els.editor.setSelectionRange(lastTask.selStart, lastTask.selStart + text.length);
+    setSel(lastTask.selStart, lastTask.selStart + text.length);
   }
 
   els.editor.focus();
@@ -708,13 +725,13 @@ function acceptSuggestion() {
 
 function insertAtCursor(snippet) {
   const doc = els.editor.value;
-  const pos = els.editor.selectionEnd;
+  const pos = sel.end;
   const before = doc.slice(0, pos);
   const prefix = before === '' || before.endsWith('\n\n') ? '' : before.endsWith('\n') ? '\n' : '\n\n';
   const text = prefix + snippet;
   els.editor.value = before + text + doc.slice(pos);
   const at = pos + text.length;
-  els.editor.setSelectionRange(at, at);
+  setSel(at, at);
   els.editor.focus();
   saveDoc();
   updateWordCount();
@@ -725,7 +742,7 @@ function insertAtCursor(snippet) {
 
 function startContinue() {
   if (controller) return;
-  const cursor = els.editor.selectionEnd; // retained even while the textarea is blurred
+  const cursor = sel.end;
   runTask({ kind: 'continue', cursor });
 }
 
@@ -734,8 +751,8 @@ function startRewrite(instruction) {
   runTask({
     kind: 'rewrite',
     instruction: instruction.trim(),
-    selStart: els.editor.selectionStart,
-    selEnd: els.editor.selectionEnd,
+    selStart: sel.start,
+    selEnd: sel.end,
   });
 }
 
@@ -780,6 +797,7 @@ function applyProject(d) {
   if (st.len) els.genLen.value = st.len;
   els.dlgFmt.checked = st.dlg !== false;
   els.matureOk.checked = !!st.mature;
+  setSel(els.editor.value.length, els.editor.value.length);
   localStorage.setItem(STORE.doc, els.editor.value);
   localStorage.setItem(STORE.story, els.story.value);
   localStorage.setItem(STORE.style, els.style.value);
@@ -981,7 +999,11 @@ els.btnSummarize.addEventListener('click', () => {
 });
 
 els.editor.addEventListener('input', () => { saveDoc(); updateWordCount(); updateCtxMeter(); updateLoreUI(); updateDirRef(); });
+for (const ev of ['input', 'click', 'keyup', 'focus', 'touchend', 'select']) {
+  els.editor.addEventListener(ev, recordSelection);
+}
 document.addEventListener('selectionchange', () => {
+  recordSelection();
   if (controller) return;
   // A textarea keeps its selection while blurred, so no focus check —
   // requiring focus here would disable a toolbar button mid-click.
