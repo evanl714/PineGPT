@@ -4,14 +4,14 @@ const API_URL = 'https://openrouter.ai/api/v1/chat/completions';
 const MODELS_URL = 'https://openrouter.ai/api/v1/models';
 const CONTEXT_AFTER = 4000;      // chars of draft sent after the cursor
 const SUMMARIZE_LIMIT = 120000;  // max chars of draft sent to the summarizer
-const STORE = { key: 'cw_key', model: 'cw_model', temp: 'cw_temp', style: 'cw_style', doc: 'cw_doc', story: 'cw_story', ctx: 'cw_ctx', lore: 'cw_lore', dir: 'cw_dir', sys: 'cw_sys', mature: 'cw_mature', len: 'cw_len', dlg: 'cw_dlg', bridge: 'cw_bridge', gh: 'cw_gh', gist: 'cw_gist' };
+const STORE = { key: 'cw_key', model: 'cw_model', temp: 'cw_temp', style: 'cw_style', doc: 'cw_doc', story: 'cw_story', ctx: 'cw_ctx', lore: 'cw_lore', dir: 'cw_dir', sys: 'cw_sys', mature: 'cw_mature', len: 'cw_len', dlg: 'cw_dlg', bridge: 'cw_bridge', density: 'cw_density', gh: 'cw_gh', gist: 'cw_gist' };
 
 const $ = (s) => document.querySelector(s);
 const els = {
   key: $('#apiKey'), showKey: $('#showKey'),
   model: $('#model'), modelList: $('#modelList'), refreshModels: $('#refreshModels'), modelHint: $('#modelHint'),
   temp: $('#temp'), tempVal: $('#tempVal'), genLen: $('#genLen'),
-  dlgFmt: $('#dlgFmt'), bridgeOk: $('#bridgeOk'), btnSceneBreak: $('#btnSceneBreak'), btnChapterBreak: $('#btnChapterBreak'), dirRef: $('#dirRef'),
+  dlgFmt: $('#dlgFmt'), bridgeOk: $('#bridgeOk'), density: $('#density'), btnSceneBreak: $('#btnSceneBreak'), btnChapterBreak: $('#btnChapterBreak'), dirRef: $('#dirRef'),
   style: $('#styleNotes'), story: $('#storyNotes'), btnSummarize: $('#btnSummarize'),
   sysOverride: $('#sysOverride'), matureOk: $('#matureOk'),
   loreScan: $('#loreScan'), loreFill: $('#loreFill'), loreInvent: $('#loreInvent'),
@@ -82,6 +82,7 @@ function loadState() {
   els.genLen.value = localStorage.getItem(STORE.len) || 'couple';
   els.dlgFmt.checked = localStorage.getItem(STORE.dlg) !== '0';
   els.bridgeOk.checked = localStorage.getItem(STORE.bridge) !== '0';
+  els.density.value = localStorage.getItem(STORE.density) || 'balanced';
   els.ghToken.value = localStorage.getItem(STORE.gh) || '';
   els.editor.value = localStorage.getItem(STORE.doc) || '';
   els.tempVal.textContent = els.temp.value;
@@ -357,13 +358,29 @@ function lengthClause() {
     + ' Treat this as a hard ceiling, not a target — when in doubt, stop sooner. Ending early is always acceptable; running long never is.';
 }
 
-function craftClause() {
-  return '\n\nProse quality: Be economical — every sentence must earn its place by advancing action, revealing '
+const ANTI_ECHO = 'Never reuse distinctive phrases, metaphors, or sentence shapes that already appear in the '
+  + 'provided draft — bring something new. If the recent draft runs loose or overwritten, do not match or '
+  + 'amplify that: write tighter than the text around you.';
+
+const DENSITY = {
+  lean: 'Prose density — STRICT: This author wants plot-forward prose. Every sentence must do work: an action '
+    + 'taken, a decision made, new information revealed, or dialogue that changes something between characters. '
+    + 'Hard ratio: at most ONE purely descriptive or atmospheric sentence per paragraph, and zero sentences '
+    + 'that restate a mood, feeling, or image already established. Banned filler: beats of silence, breaths '
+    + 'released or held, lingering gazes, pounding hearts, \u201cseemed to\u201d, \u201cfor a long '
+    + 'moment\u201d, weather or lighting used as padding, and any sentence that summarizes what a character '
+    + 'feels instead of showing them do something about it. Before finishing, delete every sentence that could '
+    + 'be removed without losing information.',
+  balanced: 'Prose quality: Be economical — every sentence must earn its place by advancing action, revealing '
     + 'character, or sharpening an image. Cut filler, throat-clearing, and restatement; prefer concrete nouns '
-    + 'and strong verbs over abstraction and adverbs; vary sentence rhythm. Never reuse distinctive phrases, '
-    + 'metaphors, or sentence shapes that already appear in the provided draft — bring something new. '
-    + 'If the recent draft runs loose or overwritten, do not match or amplify that: write tighter than the '
-    + 'text around you. Do not stall in interiority, scenery, or summary of feelings already shown.';
+    + 'and strong verbs over abstraction and adverbs; vary sentence rhythm. Do not stall in interiority, '
+    + 'scenery, or summary of feelings already shown.',
+  lush: 'Prose quality: Rich, textured description is welcome when it is specific and fresh — but even lush '
+    + 'prose must move: no restatement, no stock phrases, no padding that repeats an established mood.',
+};
+
+function craftClause() {
+  return '\n\n' + (DENSITY[els.density.value] || DENSITY.balanced) + ' ' + ANTI_ECHO;
 }
 
 function formattingClause() {
@@ -942,6 +959,7 @@ els.refreshModels.addEventListener('click', fetchModels);
 els.genLen.addEventListener('change', () => localStorage.setItem(STORE.len, els.genLen.value));
 els.dlgFmt.addEventListener('change', () => localStorage.setItem(STORE.dlg, els.dlgFmt.checked ? '1' : '0'));
 els.bridgeOk.addEventListener('change', () => localStorage.setItem(STORE.bridge, els.bridgeOk.checked ? '1' : '0'));
+els.density.addEventListener('change', () => localStorage.setItem(STORE.density, els.density.value));
 els.btnSceneBreak.addEventListener('click', () => insertAtCursor('***\n\n'));
 els.btnChapterBreak.addEventListener('click', () => {
   const nums = [...els.editor.value.matchAll(/^[ \t]*chapter\s+(\d+)\b/gim)].map((m) => parseInt(m[1], 10));

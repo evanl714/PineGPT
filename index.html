@@ -4,13 +4,13 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
   <title>CoWriter</title>
-  <link rel="stylesheet" href="style.css?v=16">
+  <link rel="stylesheet" href="style.css?v=17">
 </head>
 <body>
   <aside class="sidebar">
     <button id="sidebarClose" class="sidebar-close" type="button" title="Close settings">&#10005;</button>
     <h1 class="logo">CoWriter</h1>
-    <p class="tagline">AI cowriting via OpenRouter &#183; <span id="version">v16</span></p>
+    <p class="tagline">AI cowriting via OpenRouter &#183; <span id="version">v17</span></p>
 
     <section class="group">
       <label for="apiKey">OpenRouter API key</label>
@@ -39,6 +39,16 @@
     <section class="group">
       <label for="styleNotes">Style notes</label>
       <textarea id="styleNotes" placeholder="Optional standing instructions, e.g.&#10;&#8226; Literary fiction, close third person, past tense&#10;&#8226; Dry humor, short sentences&#10;&#8226; Never use the word 'suddenly'"></textarea>
+    </section>
+
+    <section class="group">
+      <label for="density">Prose density</label>
+      <select id="density">
+        <option value="lean">Lean &#8212; plot-forward, minimal description</option>
+        <option value="balanced" selected>Balanced &#8212; economical but textured</option>
+        <option value="lush">Lush &#8212; description welcome</option>
+      </select>
+      <p class="hint" id="densityHint">Lean enforces a hard ratio: every sentence must do work, one descriptive sentence per paragraph at most, stock filler banned.</p>
     </section>
 
     <section class="group">
@@ -200,6 +210,6 @@
     </div>
   </div>
 
-  <script src="app.js?v=16"></script>
+  <script src="app.js?v=17"></script>
 </body>
 </html>
