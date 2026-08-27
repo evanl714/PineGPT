@@ -77,11 +77,16 @@ no dependencies.
   live model list and search it.
 - **Autosave** — the draft, key, and settings persist in `localStorage`.
   Download the draft as Markdown anytime.
-- **Move between devices** — **Export/Import project** bundles the draft,
-  notes, lorebook, and settings into one .json file; **GitHub Gist sync**
-  saves that bundle to a private gist so you can ↑ Save on one device and
-  ↓ Load on another (paste a token with the gist scope once per device).
-  The OpenRouter API key never leaves the device either way.
+- **Multiple books** — a Book switcher keeps any number of projects, each
+  with its own draft, notes, lorebook, and direction; New/Rename/Delete
+  manage them, and switching stashes the current book locally.
+- **Move between devices** — **Export/Import project** bundles the active
+  book into one .json file; **GitHub Gist sync** stores each book as its
+  own file in a single private gist — ↑ Save pushes the active book,
+  ↓ Load pulls every book down to the device (paste a classic token with
+  the gist scope once per device). A legacy single-project gist file loads
+  as a book automatically. The OpenRouter API key never leaves the device
+  either way.
 
 ## Privacy
 

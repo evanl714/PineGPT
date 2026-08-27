@@ -4,7 +4,7 @@ const API_URL = 'https://openrouter.ai/api/v1/chat/completions';
 const MODELS_URL = 'https://openrouter.ai/api/v1/models';
 const CONTEXT_AFTER = 4000;      // chars of draft sent after the cursor
 const SUMMARIZE_LIMIT = 120000;  // max chars of draft sent to the summarizer
-const STORE = { key: 'cw_key', model: 'cw_model', temp: 'cw_temp', style: 'cw_style', doc: 'cw_doc', story: 'cw_story', ctx: 'cw_ctx', lore: 'cw_lore', dir: 'cw_dir', sys: 'cw_sys', mature: 'cw_mature', len: 'cw_len', dlg: 'cw_dlg', bridge: 'cw_bridge', density: 'cw_density', gh: 'cw_gh', gist: 'cw_gist' };
+const STORE = { key: 'cw_key', model: 'cw_model', temp: 'cw_temp', style: 'cw_style', doc: 'cw_doc', story: 'cw_story', ctx: 'cw_ctx', lore: 'cw_lore', dir: 'cw_dir', sys: 'cw_sys', mature: 'cw_mature', len: 'cw_len', dlg: 'cw_dlg', bridge: 'cw_bridge', density: 'cw_density', gh: 'cw_gh', gist: 'cw_gist', bookname: 'cw_bookname', books: 'cw_books' };
 
 const $ = (s) => document.querySelector(s);
 const els = {
@@ -25,6 +25,7 @@ const els = {
   loreDelete: $('#loreDelete'),
   wordCount: $('#wordCount'), saveState: $('#saveState'), download: $('#download'),
   exportProj: $('#exportProj'), importProj: $('#importProj'), importFile: $('#importFile'),
+  bookSelect: $('#bookSelect'), bookNew: $('#bookNew'), bookRename: $('#bookRename'), bookDelete: $('#bookDelete'),
   ghToken: $('#ghToken'), showGh: $('#showGh'), syncSave: $('#syncSave'), syncLoad: $('#syncLoad'), syncStatus: $('#syncStatus'),
   btnContinue: $('#btnContinue'), btnImprove: $('#btnImprove'), btnShorten: $('#btnShorten'),
   btnExpand: $('#btnExpand'), customInstr: $('#customInstr'), btnCustom: $('#btnCustom'),
@@ -93,6 +94,7 @@ function loadState() {
   renderLoreList();
   updateLoreUI();
   updateDirRef();
+  renderBookSelect();
 }
 
 let saveTimer = null;
@@ -792,12 +794,68 @@ function startRewrite(instruction) {
 /* ---------- Project bundle (export / import / gist sync) ---------- */
 
 const GIST_DESC = 'CoWriter sync';
-const GIST_FILE = 'cowriter-project.json';
+const GIST_FILE = 'cowriter-project.json'; // legacy single-project file
+const BOOK_PREFIX = 'book-';
+
+function activeBookName() {
+  return localStorage.getItem(STORE.bookname) || 'Untitled book';
+}
+
+function setActiveBookName(name) {
+  localStorage.setItem(STORE.bookname, name);
+  renderBookSelect();
+}
+
+function bookLibrary() {
+  try { return JSON.parse(localStorage.getItem(STORE.books)) || {}; } catch { return {}; }
+}
+
+function saveBookLibrary(map) {
+  localStorage.setItem(STORE.books, JSON.stringify(map));
+}
+
+// The active book lives in the regular per-field storage; the library holds
+// the parked ones. Stash before anything replaces the active book.
+function stashActiveBook() {
+  const map = bookLibrary();
+  map[activeBookName()] = projectData();
+  saveBookLibrary(map);
+}
+
+function renderBookSelect() {
+  const names = new Set(Object.keys(bookLibrary()));
+  names.add(activeBookName());
+  els.bookSelect.replaceChildren(...[...names].sort((a, b) => a.localeCompare(b)).map((n) => {
+    const o = document.createElement('option');
+    o.value = n;
+    o.textContent = n;
+    return o;
+  }));
+  els.bookSelect.value = activeBookName();
+}
+
+// A fresh book keeps the tool settings and style voice, drops the content.
+function emptyBook(name) {
+  return { ...projectData(), name, draft: '', story: '', direction: '', lore: [] };
+}
+
+function switchBook(name) {
+  if (name === activeBookName()) return;
+  stashActiveBook();
+  const d = bookLibrary()[name];
+  setActiveBookName(name);
+  applyProject(d || emptyBook(name));
+}
+
+function bookFileName(name) {
+  return BOOK_PREFIX + name.replace(/[\/\\#%?"<>|:*]+/g, '-').slice(0, 60) + '.json';
+}
 
 // Everything that defines the project — deliberately NOT the OpenRouter key.
 function projectData() {
   return {
     version: 1,
+    name: activeBookName(),
     savedAt: new Date().toISOString(),
     draft: els.editor.value,
     story: els.story.value,
@@ -850,6 +908,7 @@ function applyProject(d) {
   renderLoreList();
   updateLoreUI();
   updateDirRef();
+  renderBookSelect();
 }
 
 function confirmOverwrite(d) {
@@ -890,7 +949,8 @@ async function findGistId() {
     } catch { localStorage.setItem(STORE.gist, ''); }
   }
   const list = await gistRequest('/gists?per_page=100');
-  const hit = list.find((g) => g.description === GIST_DESC && g.files && g.files[GIST_FILE]);
+  const hit = list.find((g) => g.description === GIST_DESC && g.files
+    && (g.files[GIST_FILE] || Object.keys(g.files).some((f) => f.startsWith(BOOK_PREFIX))));
   if (hit) localStorage.setItem(STORE.gist, hit.id);
   return hit ? hit.id : null;
 }
@@ -907,14 +967,14 @@ async function syncSave() {
     const body = JSON.stringify({
       description: GIST_DESC,
       public: false,
-      files: { [GIST_FILE]: { content: JSON.stringify(projectData(), null, 1) } },
+      files: { [bookFileName(activeBookName())]: { content: JSON.stringify(projectData(), null, 1) } },
     });
     const id = await findGistId();
     const gist = id
       ? await gistRequest(`/gists/${id}`, { method: 'PATCH', body })
       : await gistRequest('/gists', { method: 'POST', body });
     localStorage.setItem(STORE.gist, gist.id);
-    els.syncStatus.textContent = `Saved ${new Date(gist.updated_at).toLocaleString()}. Load this on your other device.`;
+    els.syncStatus.textContent = `Saved \u201c${activeBookName()}\u201d ${new Date(gist.updated_at).toLocaleString()}. Load on your other device to pull it.`;
   } catch (err) {
     els.syncStatus.textContent = err.message;
   } finally {
@@ -927,18 +987,38 @@ async function syncLoad() {
   els.syncStatus.textContent = 'Loading from GitHub…';
   try {
     const id = await findGistId();
-    if (!id) throw new Error('No synced project found on this GitHub account yet — Save from the other device first.');
+    if (!id) throw new Error('No synced books found on this GitHub account yet — Save from the other device first.');
     const gist = await gistRequest(`/gists/${id}`);
-    const f = gist.files[GIST_FILE];
-    const content = f.truncated ? await (await fetch(f.raw_url)).text() : f.content;
-    const d = JSON.parse(content);
-    if (typeof d.draft !== 'string') throw new Error('The synced file is not a CoWriter project.');
-    if (!confirmOverwrite(d)) {
+    const entries = [];
+    for (const [fname, f] of Object.entries(gist.files || {})) {
+      const isBook = fname.startsWith(BOOK_PREFIX) && fname.endsWith('.json');
+      if (!isBook && fname !== GIST_FILE) continue;
+      const content = f.truncated ? await (await fetch(f.raw_url)).text() : f.content;
+      let d;
+      try { d = JSON.parse(content); } catch { continue; }
+      if (typeof d.draft !== 'string') continue;
+      entries.push({ legacy: !isBook, d });
+    }
+    // The legacy single-project file only counts until real book files exist.
+    const chosen = entries.some((e) => !e.legacy) ? entries.filter((e) => !e.legacy) : entries;
+    if (!chosen.length) throw new Error('No books found in the synced gist yet — Save from the other device first.');
+    const names = chosen.map((e) => e.d.name || 'Untitled book');
+    if (!confirm(`Load ${names.length} book${names.length === 1 ? '' : 's'} from GitHub: ${names.join(', ')}?\nLocal copies of these books will be replaced.`)) {
       els.syncStatus.textContent = 'Load cancelled.';
       return;
     }
-    applyProject(d);
-    els.syncStatus.textContent = `Loaded (saved ${d.savedAt ? new Date(d.savedAt).toLocaleString() : 'unknown time'}).`;
+    stashActiveBook();
+    const map = bookLibrary();
+    let activeLoaded = null;
+    for (const e of chosen) {
+      const nm = e.d.name || 'Untitled book';
+      map[nm] = e.d;
+      if (nm === activeBookName()) activeLoaded = e.d;
+    }
+    saveBookLibrary(map);
+    if (activeLoaded) applyProject(activeLoaded);
+    renderBookSelect();
+    els.syncStatus.textContent = `Loaded: ${names.join(', ')}. Switch books from the Book menu.`;
   } catch (err) {
     els.syncStatus.textContent = err.message;
   } finally {
@@ -999,6 +1079,7 @@ els.loreDelete.addEventListener('click', () => {
   renderLoreList();
   updateLoreUI();
   updateDirRef();
+  renderBookSelect();
 });
 for (const [el, field] of [[els.loreName, 'name'], [els.loreTags, 'tags'], [els.loreContent, 'content']]) {
   el.addEventListener('input', () => {
@@ -1080,6 +1161,43 @@ els.btnDiscard.addEventListener('click', () => {
   }
 });
 
+els.bookSelect.addEventListener('change', () => switchBook(els.bookSelect.value));
+els.bookNew.addEventListener('click', () => {
+  const name = (prompt('Name for the new book:') || '').trim();
+  if (!name) return;
+  if (name === activeBookName() || bookLibrary()[name]) {
+    alert('A book with that name already exists.');
+    return;
+  }
+  stashActiveBook();
+  setActiveBookName(name);
+  applyProject(emptyBook(name));
+});
+els.bookRename.addEventListener('click', () => {
+  const old = activeBookName();
+  const name = (prompt('New name for this book:', old) || '').trim();
+  if (!name || name === old) return;
+  if (bookLibrary()[name]) {
+    alert('A book with that name already exists.');
+    return;
+  }
+  const map = bookLibrary();
+  delete map[old];
+  saveBookLibrary(map);
+  setActiveBookName(name);
+  els.syncStatus.textContent = `Renamed locally. The gist may still hold a file for \u201c${old}\u201d \u2014 delete it at gist.github.com if unwanted.`;
+});
+els.bookDelete.addEventListener('click', () => {
+  const name = activeBookName();
+  if (!confirm(`Delete \u201c${name}\u201d on this device? Its copy in the GitHub gist (if saved) is not removed.`)) return;
+  const map = bookLibrary();
+  delete map[name];
+  saveBookLibrary(map);
+  const next = Object.keys(map).sort()[0];
+  setActiveBookName(next || 'Untitled book');
+  applyProject(next ? map[next] : emptyBook(next || 'Untitled book'));
+});
+
 els.exportProj.addEventListener('click', () => {
   const blob = new Blob([JSON.stringify(projectData(), null, 1)], { type: 'application/json' });
   const a = document.createElement('a');
@@ -1096,7 +1214,13 @@ els.importFile.addEventListener('change', async () => {
   try {
     const d = JSON.parse(await file.text());
     if (typeof d.draft !== 'string') throw new Error('bad file');
-    if (confirmOverwrite(d)) applyProject(d);
+    if (!confirmOverwrite(d)) return;
+    const nm = d.name || 'Imported book';
+    if (nm !== activeBookName()) {
+      stashActiveBook();
+      setActiveBookName(nm);
+    }
+    applyProject(d);
   } catch {
     alert('That file is not a CoWriter project export.');
   }

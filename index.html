@@ -4,13 +4,23 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
   <title>CoWriter</title>
-  <link rel="stylesheet" href="style.css?v=17">
+  <link rel="stylesheet" href="style.css?v=18">
 </head>
 <body>
   <aside class="sidebar">
     <button id="sidebarClose" class="sidebar-close" type="button" title="Close settings">&#10005;</button>
     <h1 class="logo">CoWriter</h1>
-    <p class="tagline">AI cowriting via OpenRouter &#183; <span id="version">v17</span></p>
+    <p class="tagline">AI cowriting via OpenRouter &#183; <span id="version">v18</span></p>
+
+    <section class="group">
+      <label for="bookSelect">Book</label>
+      <select id="bookSelect"></select>
+      <div class="row2">
+        <button id="bookNew" type="button">New</button>
+        <button id="bookRename" type="button">Rename</button>
+        <button id="bookDelete" type="button" class="danger">Delete</button>
+      </div>
+    </section>
 
     <section class="group">
       <label for="apiKey">OpenRouter API key</label>
@@ -114,7 +124,7 @@
         <button id="syncSave" type="button">&#8593; Save</button>
         <button id="syncLoad" type="button">&#8595; Load</button>
       </div>
-      <p class="hint" id="syncStatus">Same project on every device: Save here, Load on the other one. Uses a private gist; your OpenRouter key never syncs. Token: must be a <strong>classic</strong> token (github.com/settings/tokens/new) with only the &#8220;gist&#8221; scope &#8212; fine-grained tokens don&#8217;t work with gists.</p>
+      <p class="hint" id="syncStatus">Each book is its own file in one private gist: &#8593; Save pushes the current book, &#8595; Load pulls every book down to this device. Uses a private gist; your OpenRouter key never syncs. Token: must be a <strong>classic</strong> token (github.com/settings/tokens/new) with only the &#8220;gist&#8221; scope &#8212; fine-grained tokens don&#8217;t work with gists.</p>
     </section>
 
     <section class="group">
@@ -210,6 +220,6 @@
     </div>
   </div>
 
-  <script src="app.js?v=17"></script>
+  <script src="app.js?v=18"></script>
 </body>
 </html>
